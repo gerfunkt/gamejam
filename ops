@@ -1,1 +1,1 @@
-{"author":{"id":"98a8d196af4b3b3a11b496a622c3857deea61c7fcfd81ca5bb36f1f18227ef6b"},"ops":[{"type":3,"timestamp":1795282982,"nonce":"1S+1VH60+ZRxYB6uSS0hOZ9Q5Rk=","message":"This repository does not hold the timeline of remote planes yet. This test waits on issue 5659f34 for the rules and on issue 2f1672a for online play.\n\nAgent: Claude Fable 5.2","files":null}]}
+{"author":{"id":"98a8d196af4b3b3a11b496a622c3857deea61c7fcfd81ca5bb36f1f18227ef6b"},"ops":[{"type":5,"timestamp":1795282982,"nonce":"bMJw9gkkDtbQE2Qc3zJvbKQ2UHc=","added":["for:person"],"removed":null}]}
