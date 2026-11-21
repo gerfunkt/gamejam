@@ -527,3 +527,191 @@ dd {
 #hud.hurt {
 	box-shadow: inset 0 0 0 0.5rem rgb(255 107 87 / 55%);
 }
+
+/* A phone that stands upright gets a notice, because the game needs the wide picture. */
+#sideways {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	place-items: center;
+	padding: 2rem;
+	background: var(--ground);
+	font-size: 1.3rem;
+	text-align: center;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+	#sideways {
+		display: grid;
+	}
+}
+
+/* The controls of a phone. Each one takes its touches, and the sky between them takes none. */
+#touch {
+	position: absolute;
+	inset: 0;
+	text-shadow: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+#touch button,
+#stick,
+#throttle-slide {
+	position: absolute;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+#touch button {
+	min-height: 0;
+	padding: 0;
+	border: 2px solid rgb(255 255 255 / 55%);
+	border-radius: 50%;
+	background: rgb(13 18 26 / 45%);
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+#touch button.held,
+#touch button[aria-pressed="true"] {
+	background: rgb(242 194 48 / 70%);
+	color: #151a22;
+}
+
+#stick {
+	left: max(1.5rem, env(safe-area-inset-left));
+	bottom: max(1.25rem, env(safe-area-inset-bottom));
+	width: 9rem;
+	height: 9rem;
+	border: 2px solid rgb(255 255 255 / 45%);
+	border-radius: 50%;
+	background: rgb(13 18 26 / 35%);
+}
+
+#knob {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 3.6rem;
+	height: 3.6rem;
+	margin: -1.8rem 0 0 -1.8rem;
+	border-radius: 50%;
+	background: rgb(255 255 255 / 65%);
+	will-change: transform;
+}
+
+#throttle-slide {
+	left: max(0.5rem, env(safe-area-inset-left));
+	top: 22%;
+	display: grid;
+	justify-items: center;
+	gap: 0.25rem;
+	color: #fff;
+	font-size: 0.7rem;
+}
+
+#touch-throttle {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	width: 2.2rem;
+	height: 7.5rem;
+}
+
+#touch-top {
+	position: absolute;
+	left: 50%;
+	bottom: max(0.5rem, env(safe-area-inset-bottom));
+	translate: -50% 0;
+	display: flex;
+	gap: 0.6rem;
+}
+
+#touch-top button {
+	position: static;
+	width: 3.4rem;
+	height: 2.4rem;
+	border-radius: 0.6rem;
+}
+
+#touch-fire {
+	right: max(1.5rem, env(safe-area-inset-right));
+	bottom: max(1.5rem, env(safe-area-inset-bottom));
+	width: 6rem;
+	height: 6rem;
+}
+
+#touch-launch {
+	right: calc(max(1.5rem, env(safe-area-inset-right)) + 6.6rem);
+	bottom: max(1rem, env(safe-area-inset-bottom));
+	width: 4rem;
+	height: 4rem;
+}
+
+#touch-flare {
+	right: calc(max(1.5rem, env(safe-area-inset-right)) + 5.4rem);
+	bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 4.6rem);
+	width: 4rem;
+	height: 4rem;
+}
+
+#touch-boost {
+	right: max(1rem, env(safe-area-inset-right));
+	bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 6.6rem);
+	width: 4rem;
+	height: 4rem;
+}
+
+/* With the controls of a phone, the display moves out from under the thumbs, and shows less. */
+.touch #gauges {
+	left: 50%;
+	bottom: auto;
+	top: 2.4rem;
+	translate: -50% 0;
+	gap: 0.8rem;
+	font-size: 0.75rem;
+	transform: scale(0.85);
+	transform-origin: top center;
+}
+
+.touch #parts,
+.touch #feed {
+	display: none;
+}
+
+.touch #radar {
+	bottom: auto;
+	top: 4.5rem;
+	width: 6.5rem;
+	height: 6.5rem;
+}
+
+.touch #target {
+	top: auto;
+	bottom: 12.5rem;
+	right: auto;
+	left: max(0.75rem, env(safe-area-inset-left));
+	width: 9rem;
+	display: none;
+}
+
+.touch #alert {
+	top: 30%;
+	font-size: 1rem;
+}
+
+.touch #scores {
+	font-size: 0.7rem;
+}
+
+/* A phone has no keys and no mouse, so its settings show neither. */
+.touch #bindings,
+.touch #bind-note,
+.touch label[for="sensitivity"],
+.touch #sensitivity,
+.touch [data-action="defaults"] {
+	display: none;
+}

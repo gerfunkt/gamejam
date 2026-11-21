@@ -16,13 +16,12 @@ use bevy::{
 };
 use serde::Deserialize;
 use sim::{
-	Event, Part, Session, arena, level_frame, tuning,
+	Event, Part, Session, arena, tuning,
 	wire::{PlaneId, PlaneState},
 };
 
 use crate::{
 	flow::{Flow, Game},
-	input::Lens,
 	page,
 };
 
@@ -37,6 +36,10 @@ const CHASE_OFFSET: Vec3 = Vec3::new(0.0, 5.0, 21.0);
 const CHASE_PACE: f32 = 12.0;
 /// The vertical angle of view, in radians.
 const FIELD_OF_VIEW: f32 = 1.05;
+/// The sine of the angle between the nose and the vertical below which the camera keeps its side.
+const STEEP_START: f32 = 0.12;
+/// The sine of the angle between the nose and the vertical above which the horizon of the camera is level.
+const STEEP_END: f32 = 0.35;
 /// How long a burst shows, in seconds.
 const BURST_SECONDS: f32 = 0.45;
 
@@ -602,23 +605,30 @@ fn show_bursts(
 fn follow(mut game: ResMut<Game>, time: Res<Time>, camera: Single<(&mut Transform, &Projection), With<Camera3d>>) {
 	let (mut transform, projection) = camera.into_inner();
 	if let Projection::Perspective(perspective) = projection {
-		game.lens = Lens {
-			half_height: (perspective.fov / 2.0).tan(),
-			aspect: perspective.aspect_ratio,
-		};
+		(game.lens.half_height, game.lens.aspect) = ((perspective.fov / 2.0).tan(), perspective.aspect_ratio);
 	}
+	game.lens.frame = transform.rotation;
 	let me = game.session.as_ref().and_then(Session::game).map(sim::Match::me);
 	let Some(plane) = me.and_then(|me| shown_planes(&game).remove(&me)) else {
 		// No match runs: the camera circles the arena.
 		let angle = time.elapsed_secs() * 0.04;
-		*transform = Transform::from_xyz(angle.cos() * 1100.0, 380.0, angle.sin() * 1100.0)
-			.looking_at(Vec3::new(0.0, 120.0, 0.0), Vec3::Y);
+		*transform = Transform::from_xyz(angle.cos() * 1100.0, 420.0, angle.sin() * 1100.0)
+			.looking_at(Vec3::new(0.0, 160.0, 0.0), Vec3::Y);
 		return;
 	};
 	if !plane.alive {
 		return;
 	}
-	let frame = level_frame(plane.orientation);
+	// A nose that points straight up or down has no level horizon. Near that, the camera keeps
+	// the side that it had, so the picture does not spin with the plane.
+	let nose = plane.forward();
+	let level = nose.cross(Vec3::Y);
+	let kept = (transform.rotation * Vec3::X)
+		.reject_from_normalized(nose)
+		.normalize_or(Vec3::X);
+	let trust = ((level.length() - STEEP_START) / (STEEP_END - STEEP_START)).clamp(0.0, 1.0);
+	let right = kept.lerp(level.normalize_or(kept), trust).normalize_or(kept);
+	let frame = Quat::from_mat3(&Mat3::from_cols(right, right.cross(nose), -nose)).normalize();
 	let place = plane.position + frame * CHASE_OFFSET;
 	// A respawn moves the camera at once. Flight moves it smoothly.
 	let pace = if transform.translation.distance(place) > 200.0 {
@@ -628,4 +638,5 @@ fn follow(mut game: ResMut<Game>, time: Res<Time>, camera: Single<(&mut Transfor
 	};
 	transform.translation = transform.translation.lerp(place, pace);
 	transform.rotation = frame;
+	game.lens.frame = frame;
 }

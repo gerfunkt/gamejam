@@ -361,6 +361,88 @@ Object.assign(scenarios, {
 	},
 });
 
+Object.assign(scenarios, {
+	/** A phone, held sideways: the stick, the buttons, the tilt, and the pause button, all by touch. */
+	async phone(browser: Browser) {
+		const context = await browser.newContext({
+			ignoreHTTPSErrors: true,
+			viewport: { width: 915, height: 412 },
+			hasTouch: true,
+			isMobile: true,
+		});
+		const player = await open(context, "phone", "touch=1");
+		const { page } = player;
+		const touch = await context.newCDPSession(page);
+		const fingers = (type: "touchStart" | "touchMove" | "touchEnd", points: { x: number; y: number; id: number }[]) =>
+			touch.send("Input.dispatchTouchEvent", { type, touchPoints: points.map((point) => ({ ...point, radiusX: 8, radiusY: 8 })) });
+		const middle = async (selector: string, id: number) => {
+			const box = (await page.locator(selector).boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+			return { x: box.x + box.width / 2, y: box.y + box.height / 2, id };
+		};
+
+		await page.getByRole("button", { name: "Fly Solo" }).tap();
+		await chooseBots(page, 0, "Rookie");
+		await page.getByRole("button", { name: "Start Match" }).tap();
+		await page.locator("#touch").waitFor({ state: "visible" });
+		check(await page.locator("#touch-fire").isVisible(), "the buttons of a phone show in a match");
+		check(await page.locator("#parts").isHidden(), "the display of a phone leaves the part bars out");
+
+		// The stick, pulled to the right, turns the plane to the right.
+		const before = Number((await nextStat(player)).heading);
+		const stick = await middle("#stick", 1);
+		await fingers("touchStart", [stick]);
+		await fingers("touchMove", [{ ...stick, x: stick.x + 22 }]);
+		await nextStat(player);
+		const turned = Number((await nextStat(player)).heading);
+		const right = ((turned - before + 540) % 360) - 180;
+		check(right > 8, `the stick turns the plane to the right (${right.toFixed(0)} degrees)`);
+
+		// A second finger holds the gun button while the first one steers.
+		const gun = await middle("#touch-fire", 2);
+		await fingers("touchMove", [{ ...stick, x: stick.x + 22 }, gun]);
+		const firing = await nextStat(player);
+		check(Number(firing.bullets) > 0, `the gun button fires while the stick steers (${firing.bullets} bullets fly)`);
+		await fingers("touchEnd", []);
+
+		// A tap releases a flare, and the slider sets the throttle.
+		await page.locator("#touch-flare").tap();
+		await page.locator("#touch-throttle").fill("1");
+		const tapped = await nextStat(player);
+		check(tapped.flares === "2", `a tap on the flare button releases a flare (${tapped.flares} left)`);
+		check(tapped.throttle === "1.00", `the slider opens the throttle (${tapped.throttle})`);
+
+		// The tilt of the phone steers, from the pose at which the player turned it on.
+		const lean = (beta: number, gamma: number) =>
+			page.evaluate(([b, g]) => window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { alpha: 0, beta: b, gamma: g })), [beta, gamma]);
+		// The phone lies on its left side, with its top at the left, and leans back a little.
+		await page.locator("#touch-throttle").fill("0.2");
+		await lean(0, -60);
+		await page.locator("#touch-tilt").tap();
+		// The browser answers the request for the sensor a moment after the tap.
+		await page.locator('#touch-tilt[aria-pressed="true"]').waitFor({ timeout: 3_000 }).catch(() => {});
+		check((await page.locator("#touch-tilt").getAttribute("aria-pressed")) === "true", "the tilt button turns the tilt steering on");
+		await page.waitForTimeout(300);
+		const level = [Number((await nextStat(player)).heading), Number((await nextStat(player)).heading)];
+		check(Math.abs(((level[1] - level[0] + 540) % 360) - 180) < 4, `a phone that stays in its pose flies straight (${level.join(" to ")})`);
+		// A small roll to the right, as with a steering wheel, turns the plane gently to the right.
+		await lean(6, -60);
+		await nextStat(player);
+		const leaned = Number((await nextStat(player)).heading);
+		const swing = ((leaned - level[1] + 540) % 360) - 180;
+		check(swing > 4 && swing < 150, `a roll of the phone to the right turns the plane to the right (${swing.toFixed(0)} degrees)`);
+		await lean(0, -60);
+		await shot(player, "phone");
+
+		// The pause button opens the menu, and a tap resumes.
+		await page.locator("#touch-pause").tap();
+		await page.locator("#pause").waitFor({ state: "visible" });
+		check(await page.locator("#touch").isHidden(), "the controls hide while the menu is open");
+		await page.getByRole("button", { name: "Resume" }).tap();
+		await page.locator("#touch").waitFor({ state: "visible" });
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+	},
+});
+
 const run = scenarios[scenario];
 if (!run) {
 	console.log(`Unknown scenario "${scenario}". The scenarios are: ${Object.keys(scenarios).join(", ")}.`);

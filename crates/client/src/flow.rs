@@ -91,6 +91,7 @@ impl Game {
 			throttle: 0.6,
 			steps: FixedSteps::default(),
 			lens: Lens {
+				frame: Quat::IDENTITY,
 				half_height: 0.58,
 				aspect: 1.78,
 			},
@@ -125,6 +126,15 @@ impl Game {
 		}
 		self.armed = Some((key.to_owned(), now + CONFIRM_TIME));
 		false
+	}
+
+	/// Open the pause menu of a match, or close it.
+	fn toggle_pause(&mut self) {
+		self.screen = match self.screen {
+			Screen::Playing => Screen::Paused,
+			Screen::Paused => Screen::Playing,
+			other => other,
+		};
 	}
 
 	fn saved_settings(&self) -> Settings {
@@ -177,6 +187,10 @@ impl Game {
 			"bots-less" => self.choose(|settings| settings.bots = settings.bots.saturating_sub(1)),
 			"bots-more" => self.choose(|settings| settings.bots += 1),
 			"start" => {
+				// A phone plays in full screen, held sideways. A tap on the start button allows the switch.
+				if input::is_touch() {
+					page::enter_fullscreen();
+				}
 				if let Some(session) = &mut self.session {
 					session.start_match((js_sys::Math::random() * f64::from(u32::MAX)) as u32);
 				}
@@ -257,13 +271,7 @@ impl Game {
 		}
 		let plane = game.plane(me)?;
 		if self.screen == Screen::Playing {
-			return Some(input::read(
-				&self.options,
-				plane.orientation,
-				self.lens,
-				&mut self.throttle,
-				dt,
-			));
+			return Some(input::read(&self.options, self.lens, &mut self.throttle, dt));
 		}
 		// A menu is open over a match that runs on: the plane holds its course.
 		Some(Controls {
@@ -279,6 +287,7 @@ impl Game {
 
 pub fn plugin(app: &mut App) {
 	page::watch_menus();
+	page::keep_sideways_in_fullscreen();
 	input::watch();
 	page::set_field("name", &Options::load().name);
 	app.insert_resource(Game::new()).add_systems(
@@ -309,6 +318,9 @@ fn handle_page(mut game: ResMut<Game>) {
 			UiEvent::Change { id, value } => game.change(&id, &value),
 		}
 	}
+	if input::take_pause() {
+		game.toggle_pause();
+	}
 	for code in input::take_pressed() {
 		if let Some(bind) = game.binding.take() {
 			// The pause key leaves the choice of a key, so it cannot be given to another action here.
@@ -317,11 +329,7 @@ fn handle_page(mut game: ResMut<Game>) {
 				game.options.save();
 			}
 		} else if code == game.options.key(Bind::Pause) {
-			game.screen = match game.screen {
-				Screen::Playing => Screen::Paused,
-				Screen::Paused => Screen::Playing,
-				other => other,
-			};
+			game.toggle_pause();
 		}
 	}
 	if input::take_left_page() && game.screen == Screen::Playing && !game.bot_pilot {

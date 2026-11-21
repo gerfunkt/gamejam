@@ -10,7 +10,7 @@ use sim::{
 
 use crate::{
 	flow::{Flow, Game, Screen},
-	input::{Bind, key_name},
+	input::{self, Bind, key_name},
 	page::{self, Piece},
 	view::Drawn,
 };
@@ -390,6 +390,12 @@ fn show_settings(game: &Game) {
 		None => String::new(),
 	};
 	page::set_text("bind-note", &note);
+	if input::is_touch() {
+		page::set_text(
+			"controls-note",
+			"The stick under your left thumb steers the plane. TILT lets you steer by tilting the phone, and CENTRE takes the way you hold it as straight ahead. The buttons under your right thumb fire the gun, launch a missile, release a flare, and boost. The slider at the left sets the throttle.",
+		);
+	}
 	if game.binding.is_none() {
 		page::set_field("sensitivity", &game.options.sensitivity.to_string());
 		page::set_field("invert", &game.options.invert.to_string());
@@ -522,6 +528,12 @@ fn show_display(
 		return page::set_hidden("hud", true);
 	};
 	page::set_hidden("hud", false);
+	// The controls of a phone show while the player flies. Their slider follows the throttle.
+	let touch = input::is_touch() && game.screen == Screen::Playing;
+	page::set_hidden("touch", !touch);
+	if touch && (page::field("touch-throttle").parse().unwrap_or(0.0) - game.throttle).abs() > 0.03 {
+		page::set_field("touch-throttle", &format!("{:.2}", game.throttle));
+	}
 	let me = running.me();
 	let planes = running.planes();
 	let (Some(own), Some(own_state)) = (

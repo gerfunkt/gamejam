@@ -252,6 +252,31 @@ pub fn toggle_fullscreen() {
 	}
 }
 
+/// Switch the page to full screen, if it is not there yet.
+pub fn enter_fullscreen() {
+	if document().fullscreen_element().is_none() {
+		toggle_fullscreen();
+	}
+}
+
+/// Hold the picture sideways whenever the page is in full screen. A phone allows this only there.
+pub fn keep_sideways_in_fullscreen() {
+	listen(&document().into(), "fullscreenchange", |_: Event| {
+		if document().fullscreen_element().is_some() {
+			// A desktop refuses the lock, and that is no error.
+			if let Some(lock) = window()
+				.screen()
+				.ok()
+				.and_then(|screen| screen.orientation().lock(web_sys::OrientationLockType::Landscape).ok())
+			{
+				wasm_bindgen_futures::spawn_local(async move {
+					let _ = wasm_bindgen_futures::JsFuture::from(lock).await;
+				});
+			}
+		}
+	});
+}
+
 /// Return the drawing context of the canvas with this id, for flat pictures such as the radar.
 pub fn canvas(id: &str) -> Option<web_sys::CanvasRenderingContext2d> {
 	let canvas: web_sys::HtmlCanvasElement = element(id).unchecked_into();

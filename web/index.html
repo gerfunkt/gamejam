@@ -45,7 +45,27 @@
 				</dl>
 			</div>
 			<canvas id="radar" width="176" height="176" aria-label="Radar: the planes around you, with your nose at the top"></canvas>
+
+			<!-- The controls of a phone, held sideways: a stick under the left thumb, and buttons under the right one. -->
+			<div id="touch" hidden>
+				<div id="stick" role="slider" aria-label="Steer" aria-valuetext="Drag to steer"><div id="knob"></div></div>
+				<label id="throttle-slide">
+					<span>THR</span>
+					<input id="touch-throttle" name="touch-throttle" type="range" min="0" max="1" step="0.05" aria-label="Throttle">
+				</label>
+				<div id="touch-top">
+					<button type="button" id="touch-pause" aria-label="Pause Menu">II</button>
+					<button type="button" id="touch-tilt" aria-pressed="false">TILT</button>
+					<button type="button" id="touch-centre" hidden>CENTRE</button>
+				</div>
+				<button type="button" id="touch-fire" aria-label="Fire the Gun">GUN</button>
+				<button type="button" id="touch-launch" aria-label="Launch a Missile">MSL</button>
+				<button type="button" id="touch-flare" aria-label="Release a Flare">FLARE</button>
+				<button type="button" id="touch-boost" aria-label="Boost">BOOST</button>
+			</div>
 		</div>
+
+		<p id="sideways" role="alert">Turn your phone sideways to play.</p>
 
 		<main id="ui">
 			<p id="status" role="status" aria-live="polite">Loading…</p>
@@ -114,7 +134,7 @@
 
 			<section id="settings" class="screen" aria-labelledby="settings-title" hidden>
 				<h2 id="settings-title">Settings</h2>
-				<p>The plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. A flare lures a missile away, if you release it in time. Select a key to change it.</p>
+				<p id="controls-note">The plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. A flare lures a missile away, if you release it in time. Select a key to change it.</p>
 				<table id="bindings" aria-label="Keys"><tbody id="binding-rows"></tbody></table>
 				<p id="bind-note" role="status" aria-live="polite"></p>
 				<label for="sensitivity">Mouse Sensitivity</label>

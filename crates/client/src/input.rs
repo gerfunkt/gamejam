@@ -1,29 +1,37 @@
-//! The input of the player: keys, the pointer, and the wheel, as actions of the game.
+//! The input of the player, as actions of the game.
 //!
-//! The page delivers the events. The rules see only [`Controls`]. Each key can change, and the
-//! choices of the player survive a visit.
+//! On a desktop, the mouse steers, and keys do the rest. On a phone, held sideways, a stick or
+//! the tilt of the phone steers, and buttons on the screen do the rest. The page delivers the
+//! events. The rules see only [`Controls`]. Each key can change, and the choices of the player
+//! survive a visit.
 
 use std::{cell::RefCell, collections::HashSet};
 
-use bevy::math::{Quat, Vec2};
+use bevy::math::{Quat, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
-use sim::{Controls, Skill, aim_direction};
-use wasm_bindgen::JsCast;
-use web_sys::{Element, Event, EventTarget, KeyboardEvent, PointerEvent, WheelEvent};
+use sim::{Controls, Skill};
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{
+	DeviceOrientationEvent, Element, Event, EventTarget, HtmlElement, KeyboardEvent, PointerEvent, WheelEvent,
+};
 
 use crate::page;
 
-/// How far a turn key or a nose key moves the aim, as the tangent of the angle.
-const KEY_AIM: f32 = 0.8;
 /// How much one notch of the wheel changes the throttle.
 const WHEEL_THROTTLE: f32 = 0.1;
 /// How much one second of a throttle key changes the throttle.
 const KEY_THROTTLE: f32 = 0.7;
+/// How far the stick or the tilt at its limit moves the aim, as the tangent of the angle.
+const STICK_AIM: f32 = 0.8;
+/// The tilt below which the phone counts as level, in radians.
+const TILT_DEAD_ZONE: f32 = 0.035;
+/// The tilt that gives the full turn, in radians.
+const TILT_FULL: f32 = 0.49;
 const STORAGE_KEY: &str = "dogfight-options";
 /// The version of the stored options. Options of another version give way to the defaults.
-const OPTIONS_VERSION: u32 = 2;
+const OPTIONS_VERSION: u32 = 3;
 
-/// An action of the game that a key does.
+/// An action of the game that a key does. The mouse alone steers, so no key does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bind {
 	Fire,
@@ -32,25 +40,17 @@ pub enum Bind {
 	Boost,
 	ThrottleUp,
 	ThrottleDown,
-	TurnLeft,
-	TurnRight,
-	NoseDown,
-	NoseUp,
 	Pause,
 }
 
 impl Bind {
-	pub const ALL: [Bind; 11] = [
+	pub const ALL: [Bind; 7] = [
 		Bind::Fire,
 		Bind::Launch,
 		Bind::Flare,
 		Bind::Boost,
 		Bind::ThrottleUp,
 		Bind::ThrottleDown,
-		Bind::TurnLeft,
-		Bind::TurnRight,
-		Bind::NoseDown,
-		Bind::NoseUp,
 		Bind::Pause,
 	];
 
@@ -63,10 +63,6 @@ impl Bind {
 			Bind::Boost => "Boost",
 			Bind::ThrottleUp => "More Throttle",
 			Bind::ThrottleDown => "Less Throttle",
-			Bind::TurnLeft => "Turn Left",
-			Bind::TurnRight => "Turn Right",
-			Bind::NoseDown => "Nose Down",
-			Bind::NoseUp => "Nose Up",
 			Bind::Pause => "Pause Menu",
 		}
 	}
@@ -81,10 +77,6 @@ impl Bind {
 			Bind::Boost => "ShiftLeft",
 			Bind::ThrottleUp => "KeyW",
 			Bind::ThrottleDown => "KeyS",
-			Bind::TurnLeft => "KeyA",
-			Bind::TurnRight => "KeyD",
-			Bind::NoseDown => "ArrowUp",
-			Bind::NoseUp => "ArrowDown",
 			Bind::Pause => "Escape",
 		}
 	}
@@ -103,7 +95,7 @@ pub struct Options {
 	pub name: String,
 	/// How far the aim moves for a move of the mouse. 1 puts the aim under the cursor.
 	pub sensitivity: f32,
-	/// Whether a mouse above the centre lowers the nose.
+	/// Whether a mouse, a stick, or a tilt upward lowers the nose.
 	pub invert: bool,
 	/// Whether the display shows no flashes on a hit.
 	#[serde(default)]
@@ -199,6 +191,34 @@ pub fn key_name(code: &str) -> String {
 	}
 }
 
+/// A button of the phone layout that acts while a finger holds it.
+#[derive(Clone, Copy)]
+enum Hold {
+	Fire,
+	Launch,
+	Flare,
+	Boost,
+}
+
+/// The buttons that act while held, each with the id of its element.
+const HOLDS: [(&str, Hold); 4] = [
+	("touch-fire", Hold::Fire),
+	("touch-launch", Hold::Launch),
+	("touch-flare", Hold::Flare),
+	("touch-boost", Hold::Boost),
+];
+
+/// The pose of the phone that counts as straight ahead.
+#[derive(Clone, Copy)]
+struct Level {
+	/// The direction of the upper edge of the picture, in the frame of the phone.
+	up: Vec3,
+	/// The roll about the line of sight, in radians.
+	roll: f32,
+	/// The lean of the picture away from the player, in radians.
+	lean: f32,
+}
+
 #[derive(Default)]
 struct State {
 	/// The codes of the keys that are down.
@@ -208,7 +228,7 @@ struct State {
 	/// The codes of the keys that went down since the last step of a match. A key that goes
 	/// down and up between two steps still counts for one step.
 	tapped: HashSet<String>,
-	/// The place of the pointer in the page, in CSS pixels.
+	/// The place of the mouse in the page, in CSS pixels.
 	pointer: Option<Vec2>,
 	left: bool,
 	right: bool,
@@ -218,6 +238,26 @@ struct State {
 	left_page: bool,
 	/// Whether a match takes the keys now, so that the browser must not act on them.
 	in_flight: bool,
+	/// Whether the page shows the controls of a phone.
+	touch: bool,
+	/// The stick, from -1 at the left and the bottom to 1 at the right and the top.
+	stick: Vec2,
+	/// The finger that holds the stick, by the id of its pointer.
+	stick_finger: Option<i32>,
+	/// The buttons that a finger holds, in the order of [`HOLDS`], and those that a finger
+	/// touched since the last step of a match.
+	held: [bool; HOLDS.len()],
+	touched: [bool; HOLDS.len()],
+	/// A new place of the throttle slider.
+	slid: Option<f32>,
+	/// Whether a finger pressed the pause button since the last look.
+	pause: bool,
+	/// Whether the tilt of the phone steers.
+	tilt: bool,
+	/// The direction of gravity in the frame of the phone, from the last sensor event.
+	gravity: Option<Vec3>,
+	/// The pose that counts as straight ahead. The next sensor reading sets it when it is empty.
+	level: Option<Level>,
 }
 
 thread_local! {
@@ -257,26 +297,35 @@ pub fn watch() {
 			leave_page();
 		}
 	});
-	page::listen(&window, "pointermove", |event: PointerEvent| {
-		STATE
-			.with_borrow_mut(|state| state.pointer = Some(Vec2::new(event.client_x() as f32, event.client_y() as f32)));
+	// Only a mouse steers by its place. A finger on the sky steers nothing.
+	let by_mouse = |event: &PointerEvent| event.pointer_type() == "mouse";
+	page::listen(&window, "pointermove", move |event: PointerEvent| {
+		if by_mouse(&event) {
+			STATE.with_borrow_mut(|state| {
+				state.pointer = Some(Vec2::new(event.client_x() as f32, event.client_y() as f32))
+			});
+		}
 	});
-	page::listen(&canvas, "pointerdown", |event: PointerEvent| {
-		STATE.with_borrow_mut(|state| {
-			state.pointer = Some(Vec2::new(event.client_x() as f32, event.client_y() as f32));
-			match event.button() {
-				0 => state.left = true,
-				2 => state.right = true,
+	page::listen(&canvas, "pointerdown", move |event: PointerEvent| {
+		if by_mouse(&event) {
+			STATE.with_borrow_mut(|state| {
+				state.pointer = Some(Vec2::new(event.client_x() as f32, event.client_y() as f32));
+				match event.button() {
+					0 => state.left = true,
+					2 => state.right = true,
+					_ => {}
+				}
+			});
+		}
+	});
+	page::listen(&window, "pointerup", move |event: PointerEvent| {
+		if by_mouse(&event) {
+			STATE.with_borrow_mut(|state| match event.button() {
+				0 => state.left = false,
+				2 => state.right = false,
 				_ => {}
-			}
-		});
-	});
-	page::listen(&window, "pointerup", |event: PointerEvent| {
-		STATE.with_borrow_mut(|state| match event.button() {
-			0 => state.left = false,
-			2 => state.right = false,
-			_ => {}
-		});
+			});
+		}
 	});
 	page::listen_active(&canvas, "wheel", |event: WheelEvent| {
 		event.prevent_default();
@@ -284,6 +333,171 @@ pub fn watch() {
 	});
 	// The right button launches a missile, so it must not open the menu of the browser.
 	page::listen_active(&canvas, "contextmenu", |event: Event| event.prevent_default());
+
+	let coarse = page::window()
+		.match_media("(pointer: coarse)")
+		.ok()
+		.flatten()
+		.is_some_and(|query| query.matches());
+	let touch = match page::query("touch").as_deref() {
+		Some("1") => true,
+		Some("0") => false,
+		_ => coarse,
+	};
+	if touch {
+		watch_phone(&window);
+	}
+}
+
+/// Start to collect the input of the controls of a phone.
+fn watch_phone(window: &EventTarget) {
+	STATE.with_borrow_mut(|state| state.touch = true);
+	if let Some(root) = page::document().document_element() {
+		let _ = root.class_list().add_1("touch");
+	}
+	for (index, (id, _)) in HOLDS.into_iter().enumerate() {
+		let button: EventTarget = page::element(id).into();
+		page::listen_active(&button, "pointerdown", move |event: PointerEvent| {
+			event.prevent_default();
+			page::set_class(id, "held", true);
+			STATE.with_borrow_mut(|state| (state.held[index], state.touched[index]) = (true, true));
+		});
+		for kind in ["pointerup", "pointercancel", "pointerleave"] {
+			page::listen(&button, kind, move |_: PointerEvent| {
+				page::set_class(id, "held", false);
+				STATE.with_borrow_mut(|state| state.held[index] = false);
+			});
+		}
+	}
+
+	// The stick follows the finger that touched it, also when the finger leaves its circle.
+	let stick = page::element("stick");
+	let follow = |event: &PointerEvent| {
+		let stick: HtmlElement = page::element("stick");
+		let bounds = stick.get_bounding_client_rect();
+		let reach = (bounds.width() / 2.0) as f32;
+		let centre = Vec2::new(
+			(bounds.left() + bounds.width() / 2.0) as f32,
+			(bounds.top() + bounds.height() / 2.0) as f32,
+		);
+		let pull = ((Vec2::new(event.client_x() as f32, event.client_y() as f32) - centre) / reach.max(1.0))
+			.clamp_length_max(1.0);
+		page::set_style(
+			"knob",
+			"transform",
+			&format!("translate({:.1}px,{:.1}px)", pull.x * reach * 0.6, pull.y * reach * 0.6),
+		);
+		STATE.with_borrow_mut(|state| state.stick = Vec2::new(pull.x, -pull.y));
+	};
+	let target: EventTarget = stick.into();
+	page::listen_active(&target, "pointerdown", move |event: PointerEvent| {
+		event.prevent_default();
+		STATE.with_borrow_mut(|state| state.stick_finger = Some(event.pointer_id()));
+		follow(&event);
+	});
+	page::listen(window, "pointermove", move |event: PointerEvent| {
+		if STATE.with_borrow(|state| state.stick_finger == Some(event.pointer_id())) {
+			follow(&event);
+		}
+	});
+	for kind in ["pointerup", "pointercancel"] {
+		page::listen(window, kind, |event: PointerEvent| {
+			let released = STATE.with_borrow_mut(|state| {
+				let released = state.stick_finger == Some(event.pointer_id());
+				if released {
+					(state.stick_finger, state.stick) = (None, Vec2::ZERO);
+				}
+				released
+			});
+			if released {
+				page::set_style("knob", "transform", "translate(0px,0px)");
+			}
+		});
+	}
+
+	page::listen(&page::element("touch-throttle").into(), "input", |_: Event| {
+		let slid = page::field("touch-throttle").parse().ok();
+		STATE.with_borrow_mut(|state| state.slid = slid);
+	});
+	page::listen(&page::element("touch-pause").into(), "click", |_: Event| {
+		STATE.with_borrow_mut(|state| state.pause = true);
+	});
+	page::listen(&page::element("touch-centre").into(), "click", |_: Event| {
+		STATE.with_borrow_mut(|state| state.level = None);
+	});
+	// The browser of an iPhone gives the sensor only on a request that comes straight from a tap,
+	// so this listener asks, and does not wait for the next frame of the game.
+	page::listen(&page::element("touch-tilt").into(), "click", |_: Event| {
+		let on = STATE.with_borrow(|state| !state.tilt);
+		if on {
+			ask_for_sensor(|| set_tilt(true));
+		} else {
+			set_tilt(false);
+		}
+	});
+	page::listen(window, "deviceorientation", |event: DeviceOrientationEvent| {
+		let (Some(beta), Some(gamma)) = (event.beta(), event.gamma()) else {
+			return;
+		};
+		let (beta, gamma) = ((beta as f32).to_radians(), (gamma as f32).to_radians());
+		// The angles of the event, as the direction of gravity in the frame of the phone: X to
+		// the right of the upright phone, Y to its top, and Z out of the screen.
+		let gravity = Vec3::new(beta.cos() * gamma.sin(), -beta.sin(), -beta.cos() * gamma.cos());
+		STATE.with_borrow_mut(|state| state.gravity = Some(gravity));
+	});
+}
+
+/// Turn the tilt steering on or off, and show it on its button.
+fn set_tilt(on: bool) {
+	STATE.with_borrow_mut(|state| (state.tilt, state.level) = (on, None));
+	let _ = page::element("touch-tilt").set_attribute("aria-pressed", if on { "true" } else { "false" });
+	page::set_hidden("touch-centre", !on);
+}
+
+/// Ask the browser for the motion sensor, where it wants to be asked, and call `granted` if it agrees.
+fn ask_for_sensor(granted: impl FnOnce() + 'static) {
+	let request = js_sys::Reflect::get(&page::window(), &"DeviceOrientationEvent".into())
+		.and_then(|sensor| js_sys::Reflect::get(&sensor, &"requestPermission".into()).map(|request| (sensor, request)));
+	let Ok((sensor, request)) = request else {
+		return granted();
+	};
+	let Some(request) = request.dyn_ref::<js_sys::Function>() else {
+		return granted();
+	};
+	let Ok(answer) = request.call0(&sensor) else { return };
+	let Ok(answer) = answer.dyn_into::<js_sys::Promise>() else {
+		return granted();
+	};
+	wasm_bindgen_futures::spawn_local(async move {
+		if wasm_bindgen_futures::JsFuture::from(answer).await == Ok(JsValue::from_str("granted")) {
+			granted();
+		}
+	});
+}
+
+/// Return how far the phone leans away from its level pose, as a place of a stick.
+///
+/// A roll to the right steers right. A lean of the top away from the player lowers the nose, as
+/// a push on a stick does.
+fn tilt(gravity: Vec3, level: &mut Option<Level>) -> Vec2 {
+	// The upper edge of the picture is the side of the phone that points most against gravity.
+	let up = level.map_or_else(
+		|| {
+			if gravity.x.abs() > gravity.y.abs() {
+				Vec3::X * -gravity.x.signum()
+			} else {
+				Vec3::Y * -gravity.y.signum()
+			}
+		},
+		|level| level.up,
+	);
+	let right = up.cross(Vec3::Z);
+	let roll = gravity.dot(right).atan2(-gravity.dot(up));
+	let lean = (-gravity.z).clamp(-1.0, 1.0).asin();
+	let level = level.get_or_insert(Level { up, roll, lean });
+	let curve =
+		|angle: f32| angle.signum() * ((angle.abs() - TILT_DEAD_ZONE) / (TILT_FULL - TILT_DEAD_ZONE)).clamp(0.0, 1.0);
+	Vec2::new(curve(roll - level.roll), -curve(lean - level.lean))
 }
 
 /// Forget every held key and button, because the page no longer sees their release.
@@ -291,6 +505,7 @@ fn leave_page() {
 	STATE.with_borrow_mut(|state| {
 		state.down.clear();
 		(state.left, state.right, state.left_page) = (false, false, true);
+		(state.held, state.stick, state.stick_finger) = ([false; HOLDS.len()], Vec2::ZERO, None);
 	});
 }
 
@@ -299,9 +514,19 @@ pub fn set_in_flight(in_flight: bool) {
 	STATE.with_borrow_mut(|state| state.in_flight = in_flight);
 }
 
+/// Return whether the page shows the controls of a phone.
+pub fn is_touch() -> bool {
+	STATE.with_borrow(|state| state.touch)
+}
+
 /// Take the codes of the keys that went down since the last call.
 pub fn take_pressed() -> Vec<String> {
 	STATE.with_borrow_mut(|state| std::mem::take(&mut state.pressed))
+}
+
+/// Return whether a finger pressed the pause button of the phone layout since the last call.
+pub fn take_pause() -> bool {
+	STATE.with_borrow_mut(|state| std::mem::take(&mut state.pause))
 }
 
 /// Return whether the page lost the focus or went out of view since the last call.
@@ -309,9 +534,11 @@ pub fn take_left_page() -> bool {
 	STATE.with_borrow_mut(|state| std::mem::take(&mut state.left_page))
 }
 
-/// The part of the camera that turns a place on the screen into a direction.
+/// The camera, as the aim needs it.
 #[derive(Clone, Copy, Debug)]
 pub struct Lens {
+	/// The rotation of the camera. The aim lies in this frame, so it is the place under the cursor.
+	pub frame: Quat,
 	/// The tangent of half of the vertical angle of view.
 	pub half_height: f32,
 	/// The width of the picture for each unit of its height.
@@ -320,49 +547,54 @@ pub struct Lens {
 
 /// Return the controls of the player for one step of `dt` seconds.
 ///
-/// The plane with this `orientation` turns toward the place under the cursor, and the turn keys
-/// and the nose keys move that place. `throttle` is the setting of the engine, which the wheel
-/// and the throttle keys change.
-pub fn read(options: &Options, orientation: Quat, lens: Lens, throttle: &mut f32, dt: f32) -> Controls {
+/// The plane turns toward the place under the mouse cursor, or toward the place that the stick
+/// or the tilt of a phone gives. `throttle` is the setting of the engine, which the wheel, the
+/// throttle keys, and the slider of a phone change.
+pub fn read(options: &Options, lens: Lens, throttle: &mut f32, dt: f32) -> Controls {
 	STATE.with_borrow_mut(|state| {
 		let tapped = std::mem::take(&mut state.tapped);
-		let held = |bind: Bind| state.down.contains(options.key(bind)) || tapped.contains(options.key(bind));
-		let axis = |more: Bind, less: Bind| f32::from(u8::from(held(more))) - f32::from(u8::from(held(less)));
-		let window = page::window();
-		let size = Vec2::new(
-			window
-				.inner_width()
-				.ok()
-				.and_then(|width| width.as_f64())
-				.unwrap_or(1.0) as f32,
-			window
-				.inner_height()
-				.ok()
-				.and_then(|height| height.as_f64())
-				.unwrap_or(1.0) as f32,
-		);
-		// The place of the cursor, from -1 at the left and the bottom to 1 at the right and the top.
-		let cursor = state.pointer.map_or(Vec2::ZERO, |pointer| {
-			Vec2::new(pointer.x / size.x * 2.0 - 1.0, 1.0 - pointer.y / size.y * 2.0)
-		});
-		let vertical = if options.invert { -cursor.y } else { cursor.y };
-		let mouse =
-			Vec2::new(cursor.x * lens.half_height * lens.aspect, vertical * lens.half_height) * options.sensitivity;
-		let keys = Vec2::new(
-			axis(Bind::TurnRight, Bind::TurnLeft),
-			axis(Bind::NoseUp, Bind::NoseDown),
-		) * KEY_AIM;
+		let touched = std::mem::take(&mut state.touched);
+		let key = |bind: Bind| state.down.contains(options.key(bind)) || tapped.contains(options.key(bind));
+		let button = |hold: Hold| state.held[hold as usize] || touched[hold as usize];
+		let axis = |more: Bind, less: Bind| f32::from(u8::from(key(more))) - f32::from(u8::from(key(less)));
+
+		let steer = if state.touch {
+			let leaned = match (state.tilt, state.gravity) {
+				(true, Some(gravity)) => tilt(gravity, &mut state.level),
+				_ => Vec2::ZERO,
+			};
+			(state.stick + leaned).clamp_length_max(1.0) * STICK_AIM
+		} else {
+			let window = page::window();
+			let side =
+				|length: Result<JsValue, JsValue>| length.ok().and_then(|length| length.as_f64()).unwrap_or(1.0) as f32;
+			let size = Vec2::new(side(window.inner_width()), side(window.inner_height()));
+			// The place of the cursor, from -1 at the left and the bottom to 1 at the right and the top.
+			let cursor = state.pointer.map_or(Vec2::ZERO, |pointer| {
+				Vec2::new(pointer.x / size.x * 2.0 - 1.0, 1.0 - pointer.y / size.y * 2.0)
+			});
+			Vec2::new(cursor.x * lens.half_height * lens.aspect, cursor.y * lens.half_height) * options.sensitivity
+		};
+		let steer = if options.invert {
+			Vec2::new(steer.x, -steer.y)
+		} else {
+			steer
+		};
+
+		if let Some(slid) = state.slid.take() {
+			*throttle = slid;
+		}
 		*throttle = (*throttle
 			+ std::mem::take(&mut state.wheel) * WHEEL_THROTTLE
 			+ axis(Bind::ThrottleUp, Bind::ThrottleDown) * KEY_THROTTLE * dt)
 			.clamp(0.0, 1.0);
 		Controls {
-			aim: aim_direction(orientation, mouse + keys),
+			aim: lens.frame * Vec3::new(steer.x, steer.y, -1.0).normalize(),
 			throttle: *throttle,
-			boost: held(Bind::Boost),
-			fire: state.left || held(Bind::Fire),
-			launch: state.right || held(Bind::Launch),
-			flare: held(Bind::Flare),
+			boost: key(Bind::Boost) || button(Hold::Boost),
+			fire: state.left || key(Bind::Fire) || button(Hold::Fire),
+			launch: state.right || key(Bind::Launch) || button(Hold::Launch),
+			flare: key(Bind::Flare) || button(Hold::Flare),
 		}
 	})
 }
