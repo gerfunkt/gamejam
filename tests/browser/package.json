@@ -1,0 +1,21 @@
+{
+	"name": "dogfight-browser-tests",
+	"private": true,
+	"type": "module",
+	"license": "SEE LICENSE IN ../../LICENSE",
+	"scripts": {
+		"check": "tsc -p .",
+		"play": "node play.ts"
+	},
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": ">=12"
+		}
+	},
+	"devDependencies": {
+		"@types/node": "^26.6.6",
+		"playwright": "^1.50.0",
+		"typescript": "^7.0.2"
+	}
+}
