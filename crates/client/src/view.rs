@@ -38,6 +38,19 @@ const FIELD_OF_VIEW: f32 = 1.05;
 const STEEP_START: f32 = 0.12;
 /// The sine of the angle between the nose and the vertical above which the horizon of the camera is level.
 const STEEP_END: f32 = 0.35;
+/// The colours of the power-ups, in the order of their kinds: speed, weapons, and repair.
+///
+/// The repair is a light green that is nearly white, because a plain green is lost against the ground.
+const POWER_COLOURS: [Color; 3] = [
+	Color::srgb(0.3, 0.8, 1.0),
+	Color::srgb(1.0, 0.6, 0.2),
+	Color::srgb(0.7, 1.0, 0.75),
+];
+/// The radius and the height of the pillar of light through a power-up, in metres.
+const PILLAR_RADIUS: f32 = 2.2;
+const PILLAR_HEIGHT: f32 = 420.0;
+/// How far the icon of a power-up swells and shrinks, as a part of its size.
+const POWER_UP_SWELL: f32 = 0.14;
 /// How long a burst shows, in seconds.
 const BURST_SECONDS: f32 = 0.45;
 
@@ -52,10 +65,12 @@ struct Models {
 	missile: [Handle<Mesh>; 3],
 	missile_paint: Handle<StandardMaterial>,
 	missile_trim: Handle<StandardMaterial>,
-	/// The ring of a power-up, and the sign in it for each kind.
+	/// The ring of a power-up, the sign in it for each kind, and the pillar of light that shows it from afar.
 	ring: Handle<Mesh>,
 	signs: [Handle<Mesh>; 3],
 	power_glow: [Handle<StandardMaterial>; 3],
+	pillar: Handle<Mesh>,
+	pillar_glow: [Handle<StandardMaterial>; 3],
 	ball: Handle<Mesh>,
 	fire: Handle<StandardMaterial>,
 	flare_glow: Handle<StandardMaterial>,
@@ -193,17 +208,24 @@ fn make_models(
 		],
 		missile_paint: materials.add(Color::srgb(0.93, 0.93, 0.95)),
 		missile_trim: materials.add(Color::srgb(0.8, 0.15, 0.12)),
-		ring: meshes.add(Torus::new(8.5, 10.0)),
+		ring: meshes.add(Torus::new(7.6, 10.4)),
+		// An arrow for speed, a shell for the weapons, and one bar of the cross for a repair.
 		signs: [
 			meshes.add(Cone::new(3.5, 9.0)),
 			meshes.add(Capsule3d::new(1.6, 7.0)),
-			meshes.add(Cuboid::new(9.0, 3.0, 3.0)),
+			meshes.add(Cuboid::new(11.0, 3.4, 3.4)),
 		],
-		power_glow: [
-			materials.add(glow(Color::srgb(0.3, 0.8, 1.0), LinearRgba::rgb(2.0, 7.0, 10.0))),
-			materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(10.0, 5.0, 1.0))),
-			materials.add(glow(Color::srgb(0.4, 1.0, 0.5), LinearRgba::rgb(2.0, 10.0, 3.0))),
-		],
+		power_glow: POWER_COLOURS.map(|colour| materials.add(glow(colour, colour.to_linear() * 8.0))),
+		pillar: meshes.add(Cylinder::new(PILLAR_RADIUS, PILLAR_HEIGHT)),
+		pillar_glow: POWER_COLOURS.map(|colour| {
+			materials.add(StandardMaterial {
+				base_color: colour.with_alpha(0.45),
+				alpha_mode: AlphaMode::Add,
+				unlit: true,
+				cull_mode: None,
+				..default()
+			})
+		}),
 		ball: meshes.add(Sphere::new(1.0)),
 		fire: materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(14.0, 6.0, 1.5))),
 		flare_glow: materials.add(glow(Color::srgb(1.0, 0.95, 0.8), LinearRgba::rgb(30.0, 26.0, 18.0))),
@@ -591,13 +613,17 @@ fn show_power_ups(
 		.map(sim::Match::power_ups)
 		.unwrap_or_default();
 	let turn = Quat::from_rotation_y(time.elapsed_secs() * 1.2);
+	// The icon swells and shrinks, because the eye finds a thing that moves.
+	let swell = 1.0 + POWER_UP_SWELL * (time.elapsed_secs() * 4.0).sin();
 	let mut drawn = 0;
 	for (icon, mut transform, mut visibility) in &mut icons {
 		drawn += 1;
 		match power_ups.get(icon.0) {
 			Some(power_up) if power_up.present => {
 				(*transform, *visibility) = (
-					Transform::from_translation(power_up.position).with_rotation(turn),
+					Transform::from_translation(power_up.position)
+						.with_rotation(turn)
+						.with_scale(Vec3::new(swell, 1.0, swell)),
 					Visibility::Inherited,
 				);
 			}
@@ -610,6 +636,10 @@ fn show_power_ups(
 			models.ring.clone(),
 			models.signs[kind].clone(),
 			models.power_glow[kind].clone(),
+		);
+		let pillar = (
+			Mesh3d(models.pillar.clone()),
+			MeshMaterial3d(models.pillar_glow[kind].clone()),
 		);
 		// The ring stands upright, so a pilot sees it from the side as a gate to fly through.
 		let upright = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
@@ -625,7 +655,16 @@ fn show_power_ups(
 					MeshMaterial3d(glow.clone()),
 					Transform::from_rotation(upright),
 				));
+				if power_up.kind == sim::PowerUpKind::Repair {
+					// The second bar of the cross.
+					icon.spawn((
+						Mesh3d(sign.clone()),
+						MeshMaterial3d(glow.clone()),
+						Transform::from_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+					));
+				}
 				icon.spawn((Mesh3d(sign), MeshMaterial3d(glow)));
+				icon.spawn(pillar);
 			});
 	}
 }
