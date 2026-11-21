@@ -1,0 +1,57 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["webgpu"]
+# Draw with WebGPU. Without this feature, the engine draws with WebGL2, which is slower.
+webgpu = ["bevy/webgpu"]
+
+[dependencies]
+# The engine draws the sky. The page holds the menus and the display, so the engine needs no UI.
+bevy = { version = "0.20", default-features = false, features = ["default_app", "default_platform", "3d_bevy_render"] }
+# Writes the details of a panic to the console of the browser.
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+sim = { path = "../sim" }
+# The `wasm-bindgen` tool in `mise.toml` must have this version.
+wasm-bindgen = "=0.2.130"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+	"AddEventListenerOptions",
+	"BinaryType",
+	"CloseEvent",
+	"console",
+	"CssStyleDeclaration",
+	"Document",
+	"DomStringMap",
+	"DomTokenList",
+	"Element",
+	"Event",
+	"EventTarget",
+	"HtmlElement",
+	"HtmlInputElement",
+	"HtmlSelectElement",
+	"KeyboardEvent",
+	"Location",
+	"MessageEvent",
+	"MouseEvent",
+	"Node",
+	"Performance",
+	"PointerEvent",
+	"Response",
+	"Storage",
+	"UrlSearchParams",
+	"VisibilityState",
+	"WebSocket",
+	"WheelEvent",
+	"Window",
+] }

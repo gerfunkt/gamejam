@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The client builds only for the browser. `cargo xtask build` builds it.
+default-members = ["crates/server", "crates/sim", "crates/xtask"]
 
 [workspace.package]
 edition = "2024"
@@ -32,7 +34,5 @@ opt-level = 3
 
 # The build for a playtest or the demo.
 [profile.release]
-# One codegen unit for each core keeps the build of the client short.
+# Several codegen units keep the build of the client short.
 codegen-units = 16
-# Without the function names, the download is about half as large.
-strip = true
