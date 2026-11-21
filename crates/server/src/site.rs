@@ -10,10 +10,11 @@ use http_body_util::Full;
 use hyper::header::{CACHE_CONTROL, CONNECTION, CONTENT_TYPE, UPGRADE};
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioIo, TokioTimer};
 use sim::room::{Join, encode_room_list};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::WebSocketStream;
@@ -25,12 +26,19 @@ use crate::files;
 
 /// How long a new connection has to finish its TLS handshake.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a client has to send the head of a request. It does not apply to a WebSocket, which
+/// the bus watches with pings.
+const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
+/// The most connections that the server serves at once: 64 rooms of 16 players, and some more for
+/// the pages that load while the players play.
+const MAX_CONNECTIONS: usize = 1200;
 
 /// The answers of the server: the files of `web`, `/rooms`, and `/ws` for the bus.
 #[derive(Clone, Debug)]
 pub struct Site {
 	web: Arc<PathBuf>,
 	bus: Bus,
+	max_connections: usize,
 }
 
 impl Site {
@@ -40,6 +48,16 @@ impl Site {
 		Self {
 			web: Arc::new(web),
 			bus,
+			max_connections: MAX_CONNECTIONS,
+		}
+	}
+
+	/// Return this site, with a limit of `max_connections` connections that it serves at once.
+	#[must_use]
+	pub fn with_max_connections(self, max_connections: usize) -> Self {
+		Self {
+			max_connections,
+			..self
 		}
 	}
 
@@ -112,7 +130,10 @@ impl Site {
 			let site = site.clone();
 			async move { Ok::<_, Infallible>(site.respond(request).await) }
 		});
+		// Without a timer, hyper turns the timeout of the request head off.
 		hyper::server::conn::http1::Builder::new()
+			.timer(TokioTimer::new())
+			.header_read_timeout(HEADER_TIMEOUT)
 			.serve_connection(TokioIo::new(stream), service)
 			.with_upgrades()
 			.await
@@ -120,9 +141,14 @@ impl Site {
 
 	/// Accept connections for ever, and serve each over TLS.
 	///
-	/// It logs each connection and each failed handshake in one line.
+	/// It accepts no connection while the limit of open connections is reached. It logs each connection and each failed handshake in one line.
 	pub async fn listen(self, listener: TcpListener, acceptor: TlsAcceptor) -> ! {
+		let open = Arc::new(Semaphore::new(self.max_connections));
 		loop {
+			let permit = Arc::clone(&open)
+				.acquire_owned()
+				.await
+				.expect("the semaphore is never closed");
 			let (tcp, peer) = match listener.accept().await {
 				Ok(accepted) => accepted,
 				Err(error) => {
@@ -138,6 +164,7 @@ impl Site {
 			}
 			let (site, acceptor) = (self.clone(), acceptor.clone());
 			tokio::spawn(async move {
+				let _permit = permit;
 				match timeout(HANDSHAKE_TIMEOUT, acceptor.accept(tcp)).await {
 					Ok(Ok(stream)) => {
 						let _ = site.serve_connection(stream).await;
@@ -160,19 +187,28 @@ fn text(status: StatusCode, body: &'static str) -> Response<Full<Bytes>> {
 
 #[cfg(test)]
 mod tests {
+	use std::net::Ipv4Addr;
+	use std::sync::Arc;
 	use std::time::Duration;
 
 	use futures_util::StreamExt;
 	use http_body_util::{BodyExt, Empty};
 	use hyper::header::{CACHE_CONTROL, CONTENT_TYPE};
 	use hyper::{Request, StatusCode};
+	use rustls::pki_types::pem::PemObject;
+	use rustls::pki_types::{CertificateDer, ServerName};
+	use rustls::{ClientConfig, RootCertStore};
 	use sim::room::{RoomStatus, parse_room_list};
+	use tokio::io::AsyncWriteExt;
+	use tokio::net::{TcpListener, TcpStream};
 	use tokio::time::timeout;
+	use tokio_rustls::{TlsAcceptor, TlsConnector};
 	use tokio_tungstenite::client_async;
 	use tokio_tungstenite::tungstenite::Message;
 
-	use super::Site;
+	use super::{HEADER_TIMEOUT, Site};
 	use crate::bus::Bus;
+	use crate::tls::{Identity, provider};
 
 	fn site() -> Site {
 		Site::new("web".into(), Bus::new())
@@ -222,5 +258,63 @@ mod tests {
 		};
 		let status = RoomStatus::parse_frame(&text).expect("a room status");
 		assert_eq!((status.id.as_str(), status.title.as_str()), ("1", "Friday"));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn a_connection_that_never_finishes_its_request_head_is_closed() {
+		let (mut near, far) = tokio::io::duplex(1 << 16);
+		let site = site();
+		let connection = tokio::spawn(async move { site.serve_connection(far).await });
+		near.write_all(b"GET / HTTP/1.1\r\nHost: lan\r\n")
+			.await
+			.expect("a partial head");
+		let ended = timeout(HEADER_TIMEOUT * 3, connection)
+			.await
+			.expect("the server must give up on a head that never ends")
+			.expect("the connection task");
+		assert!(ended.is_err(), "the connection ends with the error of the timeout");
+	}
+
+	#[tokio::test]
+	async fn the_server_serves_no_more_connections_than_its_limit() {
+		let directory = tempfile::tempdir().expect("a temporary directory");
+		let identity = Identity::load_or_create(directory.path(), &[Ipv4Addr::LOCALHOST]).expect("a certificate");
+		let mut roots = RootCertStore::empty();
+		for certificate in
+			CertificateDer::pem_file_iter(directory.path().join("cert.pem")).expect("the kept certificate")
+		{
+			roots.add(certificate.expect("a certificate")).expect("a trust anchor");
+		}
+		let acceptor = TlsAcceptor::from(Arc::new(identity.server_config().expect("a server config")));
+		let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.expect("a free port");
+		let address = listener.local_addr().expect("an address");
+		tokio::spawn(site().with_max_connections(1).listen(listener, acceptor));
+		let connector = TlsConnector::from(Arc::new(
+			ClientConfig::builder_with_provider(provider())
+				.with_safe_default_protocol_versions()
+				.expect("protocol versions")
+				.with_root_certificates(roots)
+				.with_no_client_auth(),
+		));
+		let name = ServerName::try_from("127.0.0.1").expect("an address");
+		let first = connector
+			.connect(
+				name.clone(),
+				TcpStream::connect(address).await.expect("the first connection"),
+			)
+			.await
+			.expect("the first handshake");
+		let second = TcpStream::connect(address).await.expect("the second connection");
+		let waiting = connector.connect(name, second);
+		tokio::pin!(waiting);
+		assert!(
+			timeout(Duration::from_millis(300), &mut waiting).await.is_err(),
+			"the second connection must wait while the first holds the only place"
+		);
+		drop(first);
+		timeout(Duration::from_secs(5), waiting)
+			.await
+			.expect("the second connection must get the place that the first left")
+			.expect("the second handshake");
 	}
 }
