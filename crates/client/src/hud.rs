@@ -394,6 +394,8 @@ fn show_settings(game: &Game) {
 		page::set_field("sensitivity", &game.options.sensitivity.to_string());
 		page::set_field("invert", &game.options.invert.to_string());
 		page::set_field("calm", &game.options.calm.to_string());
+		page::set_field("effects-volume", &game.options.effects_volume.to_string());
+		page::set_field("voice-volume", &game.options.voice_volume.to_string());
 	}
 }
 

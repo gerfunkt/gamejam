@@ -10,6 +10,7 @@
 
 use bevy::prelude::*;
 
+mod audio;
 mod flow;
 mod hud;
 mod input;
@@ -42,6 +43,6 @@ fn main() {
 				})
 				.disable::<bevy::app::PanicHandlerPlugin>(),
 		)
-		.add_plugins((flow::plugin, view::plugin, hud::plugin))
+		.add_plugins((flow::plugin, view::plugin, hud::plugin, audio::plugin))
 		.run();
 }

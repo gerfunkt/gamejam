@@ -108,12 +108,22 @@ pub struct Options {
 	/// Whether the display shows no flashes on a hit.
 	#[serde(default)]
 	pub calm: bool,
+	/// The loudness of the sound effects, from 0 for silence to 1.
+	#[serde(default = "default_volume")]
+	pub effects_volume: f32,
+	/// The loudness of the pilot voices, from 0 for silence to 1.
+	#[serde(default = "default_volume")]
+	pub voice_volume: f32,
 	/// The key of each action, in the order of [`Bind::ALL`].
 	keys: Vec<String>,
 	/// The number of bots that the player chose last as a host.
 	pub bots: u8,
 	/// The skill of the bots that the player chose last as a host.
 	pub skill: Skill,
+}
+
+fn default_volume() -> f32 {
+	0.7
 }
 
 impl Default for Options {
@@ -124,6 +134,8 @@ impl Default for Options {
 			sensitivity: 1.0,
 			invert: false,
 			calm: false,
+			effects_volume: default_volume(),
+			voice_volume: default_volume(),
 			keys: Bind::ALL.iter().map(|bind| bind.default_key().to_owned()).collect(),
 			bots: 4,
 			skill: Skill::Pilot,

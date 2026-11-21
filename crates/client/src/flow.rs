@@ -9,6 +9,7 @@ use sim::{
 };
 
 use crate::{
+	audio,
 	input::{self, Bind, Lens, Options},
 	net::{self, Incoming},
 	page::{self, UiEvent},
@@ -234,6 +235,8 @@ impl Game {
 			"sensitivity" => self.options.sensitivity = value.parse().unwrap_or(1.0),
 			"invert" => self.options.invert = value == "true",
 			"calm" => self.options.calm = value == "true",
+			"effects-volume" => self.options.effects_volume = value.parse().unwrap_or(0.7),
+			"voice-volume" => self.options.voice_volume = value.parse().unwrap_or(0.7),
 			"skill" => {
 				if let Some(skill) = Skill::from_name(value) {
 					self.choose(|settings| settings.skill = skill);
@@ -297,7 +300,12 @@ fn handle_page(mut game: ResMut<Game>) {
 	// The clicks come first: a click on a key in the settings must count before the key that follows it.
 	for event in page::take_ui_events() {
 		match event {
-			UiEvent::Action { action, value } => game.act(&action, &value, now),
+			UiEvent::Action { action, value } => {
+				// A browser allows sound only after the player acted, and a click is such an act.
+				audio::start();
+				audio::play("ui_click", 0.5);
+				game.act(&action, &value, now);
+			}
 			UiEvent::Change { id, value } => game.change(&id, &value),
 		}
 	}
@@ -461,7 +469,7 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 			)
 		});
 	page::log(&format!(
-		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={} bullets={bullets} flares={flares} throttle={:.2}{flight}",
+		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={} bullets={bullets} flares={flares} sounds={} throttle={:.2}{flight}",
 		game.screen,
 		page::backend(),
 		stats.frames as f32 / stats.since_line,
@@ -469,6 +477,7 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 		stats.hits_sent,
 		stats.hits_taken,
 		stats.bursts,
+		audio::started(),
 		game.throttle,
 	));
 	(game.stats.frames, game.stats.since_line) = (0, 0.0);
