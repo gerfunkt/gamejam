@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::header::{CACHE_CONTROL, CONNECTION, CONTENT_TYPE, UPGRADE};
+use hyper::header::{
+	ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN, CACHE_CONTROL, CONNECTION, CONTENT_TYPE, UPGRADE,
+};
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -62,7 +64,20 @@ impl Site {
 	}
 
 	/// Answer one request. A valid request for `/ws` gets 101, and its connection then joins the bus.
+	///
+	/// A page of the game on another site, such as GitHub Pages, may read the room list, and the
+	/// server answers the question of the browser before such a page reads it.
 	pub async fn respond<B>(&self, mut request: Request<B>) -> Response<Full<Bytes>> {
+		if request.method() == Method::OPTIONS && request.uri().path() == "/rooms" {
+			// The question of the browser before a page on a public site reads a server on a local network.
+			return Response::builder()
+				.status(StatusCode::NO_CONTENT)
+				.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+				.header(ACCESS_CONTROL_ALLOW_METHODS, "GET")
+				.header("access-control-allow-private-network", "true")
+				.body(Full::new(Bytes::new()))
+				.expect("the headers are valid");
+		}
 		if request.method() != Method::GET {
 			return text(StatusCode::METHOD_NOT_ALLOWED, "only GET is allowed");
 		}
@@ -70,6 +85,7 @@ impl Site {
 			"/rooms" => Response::builder()
 				.header(CONTENT_TYPE, "application/json")
 				.header(CACHE_CONTROL, "no-store")
+				.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
 				.body(Full::new(Bytes::from(encode_room_list(&self.bus.rooms()))))
 				.expect("the headers are valid"),
 			"/ws" => self.upgrade(&mut request),
@@ -229,6 +245,42 @@ mod tests {
 			(rooms[0].id.as_str(), rooms[0].title.as_str()),
 			(OPEN_ROOM_ID, OPEN_ROOM_TITLE)
 		);
+	}
+
+	#[tokio::test]
+	async fn a_page_on_another_site_may_read_the_room_list() {
+		let request = Request::get("/rooms")
+			.body(Empty::<bytes::Bytes>::new())
+			.expect("a request");
+		let response = site().respond(request).await;
+		assert_eq!(
+			response.headers()["access-control-allow-origin"],
+			"*",
+			"the browser lets any site read the list"
+		);
+		let question = Request::options("/rooms")
+			.header("access-control-request-private-network", "true")
+			.body(Empty::<bytes::Bytes>::new())
+			.expect("a request");
+		let answer = site().respond(question).await;
+		assert_eq!(
+			answer.status(),
+			StatusCode::NO_CONTENT,
+			"the question gets an empty answer"
+		);
+		assert_eq!(
+			answer.headers()["access-control-allow-private-network"],
+			"true",
+			"a public site may read a server on a local network"
+		);
+	}
+
+	#[tokio::test]
+	async fn a_question_about_another_address_is_refused() {
+		let question = Request::options("/")
+			.body(Empty::<bytes::Bytes>::new())
+			.expect("a request");
+		assert_eq!(site().respond(question).await.status(), StatusCode::METHOD_NOT_ALLOWED);
 	}
 
 	#[tokio::test]
