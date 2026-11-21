@@ -108,7 +108,12 @@ impl Bus {
 				incoming = ws.next() => match incoming {
 					Some(Ok(Message::Binary(message))) => self.relay(&room, number, &message),
 					Some(Ok(Message::Text(text))) => self.control(&room, number, &text),
-					Some(Ok(Message::Close(_)) | Err(_)) | None => break,
+					Some(Ok(Message::Close(_))) => {
+						// The reply to the close frame waits in the socket until it is flushed.
+						let _ = timeout(WRITE_TIMEOUT, ws.flush()).await;
+						break;
+					}
+					Some(Err(_)) | None => break,
 					Some(Ok(_)) => {}
 				},
 				outgoing = queue.recv() => match outgoing {
@@ -817,5 +822,23 @@ mod tests {
 			Ok(CloseCode::Removed),
 			"the reason is not lost behind the queue"
 		);
+	}
+
+	#[tokio::test]
+	async fn a_member_that_closes_its_socket_gets_the_close_reply_and_no_reset() {
+		let bus = Bus::new();
+		let mut player = Client::join(&bus, Join::Open).await;
+		player.status().await;
+		player.ws.close(None).await.expect("the close must go out");
+		let mut replies = 0;
+		timeout(Duration::from_secs(5), async {
+			while let Some(frame) = player.ws.next().await {
+				let frame = frame.expect("the stream must end with the close handshake, not with a reset");
+				replies += usize::from(matches!(frame, Message::Close(_)));
+			}
+		})
+		.await
+		.expect("the stream must end");
+		assert_eq!(replies, 1, "the bus must answer the close frame with its own");
 	}
 }
