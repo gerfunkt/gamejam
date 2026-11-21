@@ -22,8 +22,9 @@ cargo xtask build [--release] [--all]
     Build the client for the browser into web/. --all also builds the WebGL2 client, which
     --release always does. It converts the plane models first.
 
-cargo xtask models
-    Turn the plane models of assets/planes/ into the GLB files of web/assets/planes/.";
+cargo xtask models [--preview]
+    Turn the plane models of assets/planes/ into the GLB files of web/assets/planes/.
+    --preview also draws each model into assets/planes/<key>-preview.png, from above and from the side.";
 
 /// A build of the client for one graphics interface of the browser.
 #[derive(Clone, Copy)]
@@ -52,7 +53,11 @@ fn main() -> Result<()> {
 	let (task, flags) = own
 		.split_first()
 		.map_or(("", &[][..]), |(task, flags)| (task.as_str(), flags));
-	let known: &[&str] = if task == "models" { &[] } else { &["--release", "--all"] };
+	let known: &[&str] = if task == "models" {
+		&["--preview"]
+	} else {
+		&["--release", "--all"]
+	};
 	ensure!(
 		flags.iter().all(|flag| known.contains(&flag.as_str())),
 		"unknown option\n\n{USAGE}"
@@ -61,7 +66,7 @@ fn main() -> Result<()> {
 	let all = release || flags.iter().any(|flag| flag == "--all");
 	match task {
 		"build" => build(release, all),
-		"models" => models::run(&root()?),
+		"models" => models::run(&root()?, flags.iter().any(|flag| flag == "--preview")),
 		"serve" => {
 			build(release, all)?;
 			// The server always builds in release, because it carries the bus for every player.
@@ -85,7 +90,7 @@ fn root() -> Result<PathBuf> {
 /// Build the client into `web/`, for WebGPU, and for WebGL2 too if `all` is set.
 fn build(release: bool, all: bool) -> Result<()> {
 	let root = root()?;
-	models::run(&root)?;
+	models::run(&root, false)?;
 	for backend in [Backend::WebGpu, Backend::WebGl2]
 		.into_iter()
 		.take(if all { 2 } else { 1 })

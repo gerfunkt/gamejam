@@ -23,6 +23,7 @@ mod geometry;
 mod glb;
 mod manifest;
 mod parts;
+mod preview;
 mod scene;
 
 /// The most triangles that a model may have, over all parts. A phone draws every plane of a match.
@@ -67,7 +68,9 @@ fn check_budget(key: &str, parts: &[(Part, Vec<Triangle>)]) -> Result<()> {
 }
 
 /// Convert every model of the manifest, and write the GLB files and the list for the client.
-pub fn run(root: &Path) -> Result<()> {
+///
+/// With `preview`, it also writes `assets/planes/<key>-preview.png` for each model.
+pub fn run(root: &Path, preview: bool) -> Result<()> {
 	let assets = root.join("assets/planes");
 	let planes = manifest::read(&assets.join("planes.toml"))?;
 	let output = root.join("web/assets/planes");
@@ -94,6 +97,11 @@ pub fn run(root: &Path) -> Result<()> {
 		let glb = glb::encode(&model.parts, &texture)?;
 		let path = output.join(format!("{}.glb", plane.key));
 		fs::write(&path, &glb).with_context(|| format!("cannot write {}", path.display()))?;
+		if preview {
+			let path = assets.join(format!("{}-preview.png", plane.key));
+			fs::write(&path, preview::render(&model.parts)?)
+				.with_context(|| format!("cannot write {}", path.display()))?;
+		}
 		let counts: Vec<String> = model
 			.parts
 			.iter()
