@@ -310,19 +310,6 @@ fn make_arena(
 			..default()
 		})),
 	));
-
-	// Red and white posts mark the edge of the arena, where a plane turns back by itself.
-	let post = meshes.add(Cuboid::new(8.0, 160.0, 8.0));
-	let paints = [Color::srgb(0.85, 0.15, 0.12), Color::srgb(0.95, 0.95, 0.95)].map(|colour| materials.add(colour));
-	for index in 0..96 {
-		let angle = index as f32 / 96.0 * std::f32::consts::TAU;
-		let (x, z) = (angle.cos() * tuning::ARENA_RADIUS, angle.sin() * tuning::ARENA_RADIUS);
-		commands.spawn((
-			Mesh3d(post.clone()),
-			MeshMaterial3d(paints[index % 2].clone()),
-			Transform::from_xyz(x, arena::ground_height(x, z) + 80.0, z),
-		));
-	}
 }
 
 fn make_camera(mut commands: Commands) {

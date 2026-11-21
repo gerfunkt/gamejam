@@ -12,6 +12,7 @@
 use bevy::prelude::*;
 
 mod audio;
+mod border;
 mod effects;
 mod flow;
 mod horizon;
@@ -54,6 +55,7 @@ fn main() {
 			view::plugin,
 			propeller::plugin,
 			horizon::plugin,
+			border::plugin,
 			sky::plugin,
 			puff::plugin,
 			effects::plugin,
