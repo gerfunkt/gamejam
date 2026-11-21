@@ -5,7 +5,7 @@ use glam::{Quat, Vec3};
 
 use crate::{
 	bot::{Skill, bot_controls},
-	gun::{Bullet, Gun, hit_part},
+	gun::{Bullet, Gun, hit_part_along},
 	missile::{Launcher, Missile, burst_damage},
 	plane::{Controls, Part, Plane},
 	rng::Rng,
@@ -463,9 +463,12 @@ impl Match {
 				.iter()
 				.filter(|(id, state)| *id != bullet.shooter && state.can_be_hit());
 			let hit = targets
-				.filter_map(|(id, state)| Some((*id, hit_part(state, from, bullet.position)?)))
-				.next();
-			if let Some((target, part)) = hit {
+				.filter_map(|(id, state)| {
+					let (part, along) = hit_part_along(state, from, bullet.position)?;
+					Some((along, *id, part))
+				})
+				.min_by(|a, b| a.0.total_cmp(&b.0));
+			if let Some((_, target, part)) = hit {
 				outbox.push(Message::Hit {
 					target,
 					part,

@@ -74,6 +74,11 @@ impl Gun {
 /// A part is hit when the line touches its hit sphere. A broken part is no longer there.
 #[must_use]
 pub fn hit_part(target: &PlaneState, from: Vec3, to: Vec3) -> Option<Part> {
+	hit_part_along(target, from, to).map(|(part, _)| part)
+}
+
+/// Return the first hit and its nearest point as a fraction of the shot.
+pub(crate) fn hit_part_along(target: &PlaneState, from: Vec3, to: Vec3) -> Option<(Part, f32)> {
 	let to_local = target.orientation.inverse();
 	let from = to_local * (from - target.position);
 	let along = to_local * (to - target.position) - from;
@@ -93,5 +98,4 @@ pub fn hit_part(target: &PlaneState, from: Vec3, to: Vec3) -> Option<Part> {
 			(miss <= part.hit_radius()).then_some((part, nearest))
 		})
 		.min_by(|a, b| a.1.total_cmp(&b.1))
-		.map(|(part, _)| part)
 }

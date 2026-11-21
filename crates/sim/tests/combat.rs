@@ -90,6 +90,28 @@ fn a_shot_that_stops_short_or_passes_wide_misses() {
 }
 
 #[test]
+fn a_shot_hits_the_nearest_plane_first() {
+	let mut bus = Bus::new(&[3, 2, 1], NO_BOTS);
+	bus.place(3, Vec3::new(0.0, 500.0, 30.0), Quat::IDENTITY);
+	bus.place(2, Vec3::new(0.0, 500.0, 0.0), Quat::IDENTITY);
+	bus.place(1, Vec3::new(0.0, 500.0, -1.0), Quat::IDENTITY);
+	bus.run(0.5, |number, _| Controls {
+		fire: number == 3,
+		..toward(Vec3::NEG_Z)
+	});
+	let events = bus.machine(3).drain_events();
+	let first = events.iter().find_map(|event| match event {
+		Event::Hit { target, .. } => Some(*target),
+		_ => None,
+	});
+	assert_eq!(
+		first,
+		Some(PlaneId::Player(2)),
+		"the first hit must be the nearer plane"
+	);
+}
+
+#[test]
 fn the_shooter_sees_its_hit_at_once_and_the_owner_of_the_target_applies_it() {
 	let mut bus = chase();
 	bus.run(1.5, |number, _| fire(number));
