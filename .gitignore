@@ -2,3 +2,5 @@
 /.agents/
 # Build output. Mr. Boxington makes it a link into its cache.
 /target
+# The certificate that the server makes for the addresses of the machine.
+/.server/
