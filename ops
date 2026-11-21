@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292357,"nonce":"RxnwrcgpkHbX+374otNrL6mGd0M=","message":"Implemented name prompt, main menu, settings with persistent key rebinding, pause menu, and lobby bot/skill configuration; verified in headless Chromium.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292358,"nonce":"RxVj0kOF6xLszNocj4cPu0oVKUo=","status":2}]}
