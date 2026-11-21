@@ -105,6 +105,7 @@ struct Remote {
 #[derive(Clone, Debug)]
 pub struct Match {
 	me: u32,
+	seed: u32,
 	host: u32,
 	settings: Settings,
 	rng: Rng,
@@ -128,6 +129,7 @@ impl Match {
 		let rng = Rng::new(u64::from(seed) << 32 | u64::from(me));
 		let mut game = Self {
 			me,
+			seed,
 			host: me,
 			settings,
 			rng,
@@ -259,6 +261,12 @@ impl Match {
 	/// Take the events since the last call, in their order.
 	pub fn drain_events(&mut self) -> Vec<Event> {
 		std::mem::take(&mut self.events)
+	}
+
+	/// Return the seed with which the match started.
+	#[must_use]
+	pub fn seed(&self) -> u32 {
+		self.seed
 	}
 
 	/// Return the plane of the player of this machine.
