@@ -1,0 +1,1 @@
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":1,"timestamp":1795282909,"nonce":"hEPUp4ePdpellTSuVNVZ2Ecnfgo=","title":"Fix accented characters in player names","message":"Open point 5 (L3). Letters with accents do not show correctly in player names.","files":null}]}
