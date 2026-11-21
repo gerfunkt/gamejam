@@ -86,7 +86,7 @@ Each requirement has a standing:
 
 | Id | Requirement | Source | Standing |
 |---|---|---|---|
-| S1 | Input from a camera or a microphone is allowed only if the developer of the game provably cannot read the frames or the sound. If that cannot be shown, such input is ruled out. | Note 16 | Proven in part: a design that isolates the camera passed its test. It needs a person who owns and reviews the isolating page, and the game uses no camera until then. |
+| S1 | The game uses no camera and no microphone. A design that isolates the camera passed its test, but no person owned the isolating page, and the owner ruled camera input out on 2026-11-21. | Note 16, owner | Disqualified: camera input |
 | S2 | The gyroscope of a phone is allowed, because it reads no camera and no microphone. | Proposed | Proven |
 | S3 | Commit messages carry no trailers and no co-author lines. | Owner | Proven |
 | S4 | One long GPU job runs at a time on the development machine. | Owner's machine | Proven |
@@ -106,6 +106,8 @@ These ideas from the notes were examined and ruled out. `feasibility.md` gives t
 | zig as a build tool | Owner | Forbidden |
 | An inference backend | Note 5 | Too slow for combat. It can return for a line of text between rounds. |
 | Generated models and sound | Note 14 | Not tried. It waits until the game is fun. |
+| WebGL2 as a fallback | Owner | Ruled out on 2026-11-21: WebGPU only, so the demo runs on Chromium. WebGL2 is about 30% slower and has no compute. |
+| Camera input for the view | Note 16, S1 | The isolation design passed its test, but no person owned the shell page. The owner ruled it out on 2026-11-21. |
 | Art direction | Owner | Out of scope for the feasibility work |
 
 ## Open points
@@ -120,6 +122,5 @@ These points have no decision or no proof yet.
 6. The show pieces of P6: replay, spectators, a graph of the delay, and one GPU simulation.
 7. Sound and hit effects.
 8. A battle royale rule set (note 17), as a stretch goal.
-9. Must the game run in browsers without WebGPU?
-10. Who owns the page that would isolate the camera (S1)? Without an owner, camera input stays out.
-11. Wired or wireless at the demo?
+
+Decided on 2026-11-21: the game needs WebGPU; camera input is out; the demo is hosted locally, so wired against wireless is moot.
