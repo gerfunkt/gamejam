@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292357,"nonce":"QIWJQXsXx1FKVQnprvlqlKGkCeE=","message":"Implemented 1.2 s lock acquisition, seeker cone, and burst damage in crates/sim/src/missile.rs with all escape tests passing.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292357,"nonce":"sedi0F3EF+M0lLmLHYYa7gvHE+U=","status":2}]}
