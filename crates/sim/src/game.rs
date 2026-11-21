@@ -527,7 +527,7 @@ impl Match {
 					local.flares.refill();
 				}
 				PowerUpKind::Repair => local.plane.repair(),
-				PowerUpKind::Speed => {}
+				PowerUpKind::Speed => local.plane.grant_speed_up(tuning::POWERUP_SPEED_SECONDS),
 			}
 		}
 		self.events.push(Event::PowerUp { plane, kind });

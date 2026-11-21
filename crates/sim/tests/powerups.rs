@@ -5,7 +5,7 @@ mod common;
 use common::{Bus, toward};
 use glam::{Quat, Vec3};
 use sim::{
-	Controls, Event, Match, Part, PowerUp, PowerUpKind, arena, tuning,
+	Controls, Event, Match, Part, Plane, PowerUp, PowerUpKind, arena, tuning,
 	wire::{Message, PlaneId, Settings},
 };
 
@@ -302,4 +302,59 @@ fn a_repair_that_arrives_after_the_loss_of_a_wing_does_not_repair() {
 	bus.machine(FIRST).receive(now, FIRST, &claim);
 	assert_eq!(healths(bus.machine(FIRST)), before, "a falling plane got a repair");
 	assert!(!present(&mut bus, FIRST, place), "the power-up is gone all the same");
+}
+
+fn plane() -> Plane {
+	Plane::new(Vec3::new(0.0, 500.0, 0.0), Quat::IDENTITY)
+}
+
+fn fly(plane: &mut Plane, controls: &Controls, seconds: f32) {
+	for _ in 0..(seconds / tuning::STEP).round() as u32 {
+		plane.step(controls, tuning::STEP);
+	}
+}
+
+#[test]
+fn a_speed_power_up_raises_the_level_speed_until_its_seconds_run_out() {
+	let mut plane = plane();
+	plane.grant_speed_up(tuning::POWERUP_SPEED_SECONDS);
+	fly(&mut plane, &toward(Vec3::NEG_Z), tuning::POWERUP_SPEED_SECONDS - 1.0);
+	let fast = tuning::MAX_SPEED + tuning::POWERUP_SPEED_BONUS;
+	assert!((plane.speed - fast).abs() < 0.5, "speed {} is not {fast}", plane.speed);
+	assert!(plane.speed_up_left() > 0.5 && plane.speed_up_left() < 1.5);
+
+	fly(&mut plane, &toward(Vec3::NEG_Z), 8.0);
+	assert_eq!(plane.speed_up_left(), 0.0);
+	assert!((plane.speed - tuning::MAX_SPEED).abs() < 0.5, "speed {}", plane.speed);
+}
+
+#[test]
+fn boost_costs_nothing_while_a_speed_power_up_lasts() {
+	let boost = Controls {
+		boost: true,
+		..toward(Vec3::NEG_Z)
+	};
+	let mut plane = plane();
+	plane.grant_speed_up(tuning::POWERUP_SPEED_SECONDS);
+	fly(&mut plane, &boost, tuning::BOOST_SECONDS + 1.0);
+	assert!(plane.is_boosting(), "the boost ran out under the power-up");
+	assert_eq!(plane.boost(), 1.0, "the tank emptied");
+
+	fly(&mut plane, &boost, tuning::POWERUP_SPEED_SECONDS);
+	assert!(plane.boost() < 1.0, "the boost stayed free after the power-up ended");
+}
+
+#[test]
+fn a_speed_power_up_speeds_up_the_plane_that_took_it() {
+	let mut bus = bus(&[FIRST, SECOND]);
+	let (place, _) = place_of(bus.machine(FIRST), PowerUpKind::Speed);
+	fly_into(&mut bus, FIRST, place);
+	let left = |bus: &mut Bus, number| {
+		bus.machine(number)
+			.plane(PlaneId::Player(number))
+			.map(Plane::speed_up_left)
+	};
+	let first = left(&mut bus, FIRST).expect("the plane");
+	assert!(first > tuning::POWERUP_SPEED_SECONDS - 0.5, "{first} s left");
+	assert_eq!(left(&mut bus, SECOND), Some(0.0), "the other plane got nothing");
 }

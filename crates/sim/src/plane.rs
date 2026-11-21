@@ -112,6 +112,8 @@ pub struct Plane {
 	falling: f32,
 	boost: f32,
 	boosting: bool,
+	/// The seconds that a speed power-up still lasts.
+	speed_up: f32,
 	protection: f32,
 }
 
@@ -129,6 +131,7 @@ impl Plane {
 			falling: 0.0,
 			boost: tuning::BOOST_SECONDS,
 			boosting: false,
+			speed_up: 0.0,
 			protection: 0.0,
 		}
 	}
@@ -193,6 +196,18 @@ impl Plane {
 		self.boosting
 	}
 
+	/// Return the seconds that a speed power-up still lasts, or 0 for a plane without one.
+	#[must_use]
+	pub fn speed_up_left(&self) -> f32 {
+		self.speed_up
+	}
+
+	/// Start a speed power-up of `seconds`. While it lasts, the level speed is higher by
+	/// [`tuning::POWERUP_SPEED_BONUS`], and boost costs nothing.
+	pub fn grant_speed_up(&mut self, seconds: f32) {
+		self.speed_up = seconds;
+	}
+
 	/// Protect the plane from all damage for `seconds`.
 	pub fn protect(&mut self, seconds: f32) {
 		self.protection = seconds;
@@ -235,6 +250,7 @@ impl Plane {
 			return;
 		}
 		self.protection = (self.protection - dt).max(0.0);
+		self.speed_up = (self.speed_up - dt).max(0.0);
 		if self.wings() < 2 {
 			self.fall(dt);
 		} else {
@@ -331,20 +347,26 @@ impl Plane {
 	/// Move the speed toward the speed that the engine, the boost, and the slope of the flight give.
 	fn accelerate(&mut self, controls: &Controls, dt: f32) {
 		let engine = !self.is_broken(Part::Engine);
-		let boosting = controls.boost && engine && self.boost > 0.0;
+		let sped_up = self.speed_up > 0.0;
+		let boosting = controls.boost && engine && (sped_up || self.boost > 0.0);
 		self.boosting = boosting;
 		if boosting {
-			self.boost = (self.boost - dt).max(0.0);
+			if !sped_up {
+				self.boost = (self.boost - dt).max(0.0);
+			}
 		} else if !controls.boost {
 			// The tank fills only while the pilot does not ask for boost, so an empty tank stays empty.
 			self.boost = (self.boost + tuning::BOOST_RECHARGE * dt).min(tuning::BOOST_SECONDS);
 		}
 		let level = if !engine {
 			tuning::GLIDE_SPEED
-		} else if boosting {
-			tuning::BOOST_SPEED
 		} else {
-			tuning::MIN_SPEED + (tuning::MAX_SPEED - tuning::MIN_SPEED) * controls.throttle.clamp(0.0, 1.0)
+			let flight = if boosting {
+				tuning::BOOST_SPEED
+			} else {
+				tuning::MIN_SPEED + (tuning::MAX_SPEED - tuning::MIN_SPEED) * controls.throttle.clamp(0.0, 1.0)
+			};
+			flight + if sped_up { tuning::POWERUP_SPEED_BONUS } else { 0.0 }
 		};
 		let target = (level - tuning::CLIMB_COST * self.forward().y).max(0.0);
 		self.speed = if self.speed < target {

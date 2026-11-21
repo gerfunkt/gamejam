@@ -196,6 +196,10 @@ pub const POWERUP_PLACES: [[f32; 3]; 8] = [
 pub const POWERUP_RADIUS: f32 = 30.0;
 /// The time until a power-up that a plane took returns, in seconds.
 pub const POWERUP_RETURN_SECONDS: f32 = 20.0;
+/// How long a speed power-up lasts, in seconds.
+pub const POWERUP_SPEED_SECONDS: f32 = 10.0;
+/// The speed that a speed power-up adds to the level speed of a plane with a working engine, in m/s.
+pub const POWERUP_SPEED_BONUS: f32 = 30.0;
 
 // Bots.
 
