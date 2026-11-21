@@ -30,6 +30,12 @@ The command builds the game, starts the server, and prints one address for each 
 
 On a desktop, the plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. On a phone, held sideways, a stick or the tilt of the phone steers, and buttons do the rest. "How to Play" in the menu explains the controls, and "Settings" changes the keys.
 
+## Publish
+
+The workflow "Publish the game" builds both clients and publishes them to GitHub Pages. Run it from the Actions tab with "Run workflow". Before the first run, switch Pages on once: Settings, Pages, Source "GitHub Actions".
+
+Pages serves files only, so the published game plays solo at once. For online play, one computer of the network runs `cargo xtask serve`. Each player opens the address that it prints once to accept the certificate, and then enters that address under "Game Server" in the room list of the published game. The address `…/?server=192.168.1.20:5201` does the same in one step.
+
 ## Develop
 
 | Command | What it does |

@@ -1,0 +1,52 @@
+# Publish the game to GitHub Pages with one click: Actions, "Publish the game", "Run workflow".
+#
+# Pages serves files only, so it cannot run the game server. The published game plays solo at once.
+# For online play, one computer of the network runs `cargo xtask serve`, and the players enter its
+# address under "Game Server" in the room list, or open the game with `?server=<host>:<port>`.
+#
+# Before the first run, switch Pages on once: Settings, Pages, Source "GitHub Actions".
+name: Publish the game
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publication at a time. A new run waits for the running one and does not cancel it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      # mise downloads wasm-bindgen from GitHub, and the token keeps it under the rate limit.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          # The build needs the compiler and wasm-bindgen from mise.toml, and none of the other tools.
+          install_args: rust github:wasm-bindgen/wasm-bindgen
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Build both clients
+        run: mise exec -- cargo xtask build
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
