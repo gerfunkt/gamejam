@@ -2,15 +2,35 @@
 "aqua:git-bug/git-bug" = "latest"
 # Mr. Boxington keeps compiled crates for every checkout. Its version does not change the build.
 mr-boxington = "latest"
+# Node runs the browser tests, and pnpm installs their packages.
 node = "lts"
+pnpm = "latest"
 "npm:@moonshot-ai/kimi-code" = "latest"
 # The minor version is fixed, because a new compiler builds the whole engine again, and can break it.
 rust = { version = "1.100", targets = "wasm32-unknown-unknown" }
+# This version must equal the version of the wasm-bindgen crate in Cargo.lock.
+"github:wasm-bindgen/wasm-bindgen" = "0.2.130"
+
+[tasks.serve]
+description = "Build the game, and serve it with the message bus over HTTPS. Open the printed address"
+run = "cargo xtask serve"
+
+[tasks.build]
+description = "Build the WebGPU client for the browser, for the loop of change and test"
+run = "cargo xtask build"
+
+[tasks."build:release"]
+description = "Build both clients for the browser, for a playtest or the demo"
+run = "cargo xtask build --release"
 
 [tasks.test]
-description = "Run the tests of the game rules"
-run = "mbx test -p sim"
+description = "Run the tests of the game rules and of the server"
+run = "mbx test --locked"
 
 [tasks.check]
 description = "Check the format and the lints of all crates"
-run = ["cargo fmt --all --check", "mbx clippy --workspace --all-targets --locked -- -D warnings"]
+run = [
+	"cargo fmt --all --check",
+	"mbx clippy --all-targets --locked -- -D warnings",
+	"mbx clippy -p client --target wasm32-unknown-unknown --locked -- -D warnings",
+]

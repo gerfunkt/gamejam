@@ -4,3 +4,6 @@
 /target
 # The certificate that the server makes for the addresses of the machine.
 /.server/
+# The builds of the client. `cargo xtask build` writes them.
+/web/webgpu/
+/web/webgl2/

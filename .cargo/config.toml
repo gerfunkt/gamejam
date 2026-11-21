@@ -1,3 +1,7 @@
 # The host links with the lld of the Rust toolchain, through `tools/ld`. No C compiler is in use.
 [target.x86_64-unknown-linux-gnu]
 linker = "tools/ld"
+
+[alias]
+# `cargo xtask serve` builds the game and serves it. `cargo xtask` alone prints the tasks.
+xtask = "run --quiet --package xtask --"
