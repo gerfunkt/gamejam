@@ -763,7 +763,9 @@ impl Default for Pace {
 	fn default() -> Self {
 		Self {
 			slow_frames: 0,
-			rests: page::query("rest").as_deref() == Some("1"),
+			// A phone gives its menus a still sky from the start. Waiting for forty slow frames
+			// can leave a stalled device without an answer for minutes.
+			rests: page::is_phone() || page::query("rest").as_deref() == Some("1"),
 		}
 	}
 }

@@ -376,6 +376,7 @@ Object.assign(scenarios, {
 		});
 		const player = await open(context, "phone", "touch=1");
 		const { page } = player;
+		check(await page.locator("#game").evaluate((canvas) => canvas.classList.contains("resting")), "a phone draws no sky behind its menus");
 		const touch = await context.newCDPSession(page);
 		const fingers = (type: "touchStart" | "touchMove" | "touchEnd", points: { x: number; y: number; id: number }[]) =>
 			touch.send("Input.dispatchTouchEvent", { type, touchPoints: points.map((point) => ({ ...point, radiusX: 8, radiusY: 8 })) });
