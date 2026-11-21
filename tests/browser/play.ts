@@ -441,6 +441,33 @@ Object.assign(scenarios, {
 		await page.locator("#touch").waitFor({ state: "visible" });
 		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
 	},
+
+	/** A solo match against three bots, and the events that the sound raised in it. */
+	async sound(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+		const player = await open(context, "sound", "pilot=bot");
+		// A line is "SOUND <event> <ids of the sounds that started, separated by commas>".
+		const raised = new Map<string, number>();
+		player.page.on("console", (message) => {
+			const [, event] = /^SOUND (\S+)/.exec(message.text()) ?? [];
+			if (event) raised.set(event, (raised.get(event) ?? 0) + 1);
+		});
+		await player.page.getByRole("button", { name: "Fly Solo" }).click();
+		await chooseBots(player.page, 3, "Veteran");
+		await player.page.getByRole("button", { name: "Start Match" }).click();
+		await player.page.locator("#hud").waitFor({ state: "visible" });
+		await player.page.waitForTimeout(40_000);
+
+		console.log(`events: ${[...raised].map(([event, count]) => `${event}=${count}`).join(" ")}`);
+		for (const event of ["match_start", "engine_loop", "gun_fire", "hit_taken"]) {
+			check(raised.has(event), `the sound raised ${event} (${raised.get(event) ?? 0})`);
+		}
+		const threat = (raised.get("missile_incoming") ?? 0) + (raised.get("enemy_lock_on_me") ?? 0);
+		check(threat > 0, `the sound raised missile_incoming or enemy_lock_on_me (${threat})`);
+		const sounds = Number(last(player).sounds);
+		check(sounds > 50, `more than 50 sounds started (${sounds})`);
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+	},
 });
 
 const run = scenarios[scenario];
