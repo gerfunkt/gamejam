@@ -212,6 +212,7 @@ impl Game {
 				self.options.save();
 			}
 			"resume" => self.screen = Screen::Playing,
+			"fullscreen" => page::toggle_fullscreen(),
 			"end" => {
 				if let (true, Some(session)) = (self.confirmed("end", now), &mut self.session) {
 					session.request_end();
@@ -232,6 +233,7 @@ impl Game {
 			"name" => self.options.name = sim::wire::clean_name(value),
 			"sensitivity" => self.options.sensitivity = value.parse().unwrap_or(1.0),
 			"invert" => self.options.invert = value == "true",
+			"calm" => self.options.calm = value == "true",
 			"skill" => {
 				if let Some(skill) = Skill::from_name(value) {
 					self.choose(|settings| settings.skill = skill);
@@ -440,6 +442,9 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 	let running = game.session.as_ref().and_then(Session::game);
 	let planes = running.map_or(0, |running| running.planes().len());
 	let bullets = running.map_or(0, |running| running.bullets().len());
+	let flares = running
+		.and_then(|running| running.flares_ready(running.me()))
+		.unwrap_or(0);
 	let (players, host) = game
 		.session
 		.as_ref()
@@ -456,7 +461,7 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 			)
 		});
 	page::log(&format!(
-		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={} bullets={bullets} throttle={:.2}{flight}",
+		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={} bullets={bullets} flares={flares} throttle={:.2}{flight}",
 		game.screen,
 		page::backend(),
 		stats.frames as f32 / stats.since_line,

@@ -405,7 +405,7 @@ fn show_flares(
 		.unwrap_or_default();
 	let mut pool = flares.iter_mut();
 	for flare in burning {
-		let place = Transform::from_translation(flare.position).with_scale(Vec3::splat(2.5));
+		let place = Transform::from_translation(flare.position).with_scale(Vec3::splat(0.9));
 		match pool.next() {
 			Some((mut transform, mut visibility)) => (*transform, *visibility) = (place, Visibility::Inherited),
 			None => {

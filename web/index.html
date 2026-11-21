@@ -17,19 +17,34 @@
 			<div id="lock-box" class="mark" aria-hidden="true" hidden></div>
 			<div id="markers" aria-hidden="true"></div>
 			<ul id="feed" aria-live="polite"></ul>
+			<p id="heading" aria-label="Heading"></p>
 			<table id="scores" aria-label="Scores"><tbody id="score-rows"></tbody></table>
 			<p id="alert" role="status" aria-live="assertive"></p>
+			<p id="praise" role="status" aria-live="polite"></p>
+			<section id="target" aria-label="Target" hidden>
+				<p id="target-name"></p>
+				<dl id="target-parts"></dl>
+			</section>
 			<div id="gauges">
+				<!-- The plane of the player from above, with the nose at the top. Each part shows its state. -->
+				<svg id="diagram" viewBox="-60 -50 120 100" width="120" height="100" role="img" aria-label="The state of the parts of your plane">
+					<rect id="shape-1" x="-56" y="-8" width="50" height="18" rx="2"/>
+					<rect id="shape-2" x="6" y="-8" width="50" height="18" rx="2"/>
+					<rect id="shape-0" x="-6" y="-26" width="12" height="52" rx="3"/>
+					<rect id="shape-3" x="-15" y="27" width="30" height="12" rx="2"/>
+					<rect id="shape-4" x="-5" y="-40" width="10" height="13" rx="2"/>
+				</svg>
 				<dl id="parts"></dl>
 				<dl id="flight">
 					<div><dt>Speed</dt><dd id="speed"></dd></div>
 					<div><dt>Height</dt><dd id="height"></dd></div>
-					<div><dt>Throttle</dt><dd id="throttle"></dd></div>
-					<div><dt>Boost</dt><dd id="boost"></dd></div>
-					<div><dt>Missiles</dt><dd id="missiles"></dd></div>
-					<div><dt>Flares</dt><dd id="flares"></dd></div>
+					<div><dt>Throttle</dt><dd class="bar" id="throttle"></dd></div>
+					<div><dt>Boost</dt><dd class="bar" id="boost"></dd></div>
+					<div><dt>Missiles</dt><dd id="missiles" class="pips"></dd></div>
+					<div><dt>Flares</dt><dd id="flares" class="pips"></dd></div>
 				</dl>
 			</div>
+			<canvas id="radar" width="176" height="176" aria-label="Radar: the planes around you, with your nose at the top"></canvas>
 		</div>
 
 		<main id="ui">
@@ -48,6 +63,7 @@
 					<button type="button" data-action="solo">Fly Solo</button>
 					<button type="button" data-action="online">Find a Room</button>
 					<button type="button" data-action="settings" class="quiet">Settings</button>
+					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
 				</div>
 			</section>
 
@@ -104,6 +120,7 @@
 				<label for="sensitivity">Mouse Sensitivity</label>
 				<input id="sensitivity" name="sensitivity" type="range" min="0.4" max="2" step="0.1">
 				<label class="check"><input id="invert" name="invert" type="checkbox"> Invert the Vertical Axis</label>
+				<label class="check"><input id="calm" name="calm" type="checkbox"> Show No Flashes on a Hit</label>
 				<div class="row">
 					<button type="button" data-action="defaults" class="quiet">Restore the Default Keys</button>
 					<button type="button" data-action="back">Back</button>
@@ -116,6 +133,7 @@
 				<div class="row">
 					<button type="button" data-action="resume">Resume</button>
 					<button type="button" data-action="settings" class="quiet">Settings</button>
+					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
 					<button type="button" id="end" data-action="end" class="quiet">End Match</button>
 					<button type="button" data-action="leave" class="quiet">Leave</button>
 				</div>

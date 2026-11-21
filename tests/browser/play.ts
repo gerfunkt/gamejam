@@ -248,12 +248,28 @@ Object.assign(scenarios, {
 		check(Number(firing.throttle) > before, `the wheel opens the throttle (${before} to ${firing.throttle})`);
 		check(Number(firing.bullets) > 0, `the left button fires the gun (${firing.bullets} bullets fly)`);
 
+		// The flare key releases one of the three flares.
+		const full = Number((await nextStat(player)).flares);
+		await page.keyboard.press("KeyE");
+		const left = Number((await nextStat(player)).flares);
+		check(full === 3 && left === 2, `the flare key releases a flare (${full} to ${left} flares)`);
+		await shot(player, "display");
+
 		// The pause key stops a solo match, and "Resume" continues it.
 		await page.keyboard.press("Escape");
 		await page.locator("#pause").waitFor({ state: "visible" });
 		await nextStat(player);
 		const paused = [await nextStat(player), await nextStat(player)];
 		check(paused[1].screen === "Paused" && paused[0].z === paused[1].z, `the plane waits while the menu is open (z ${paused[0].z} and ${paused[1].z})`);
+
+		// The menu switches the page to full screen, and back.
+		const isFull = () => page.evaluate(() => document.fullscreenElement !== null);
+		await page.getByRole("button", { name: "Full Screen" }).click();
+		await page.waitForFunction(() => document.fullscreenElement !== null, null, { timeout: 3_000 }).catch(() => {});
+		check(await isFull(), "the button switches the page to full screen");
+		await page.getByRole("button", { name: "Full Screen" }).click();
+		await page.waitForFunction(() => document.fullscreenElement === null, null, { timeout: 3_000 }).catch(() => {});
+		check(!(await isFull()), "the button leaves full screen again");
 
 		// A key changes in the settings, and the new key works.
 		await page.getByRole("button", { name: "Settings" }).click();

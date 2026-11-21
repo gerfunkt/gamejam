@@ -5,7 +5,7 @@ use sim::{
 	Event, Part, Phase, Session, Skill,
 	room::MAX_MEMBERS,
 	tuning,
-	wire::{MAX_BOTS, PlaneId},
+	wire::{MAX_BOTS, PlaneId, PlaneState},
 };
 
 use crate::{
@@ -23,6 +23,16 @@ const FEED_SECONDS: f32 = 7.0;
 const HIT_SECONDS: f32 = 0.12;
 /// The distance ahead of the plane at which the gun sight floats, in metres.
 const SIGHT_DISTANCE: f32 = 400.0;
+/// How long the praise for a kill shows, in seconds.
+const PRAISE_SECONDS: f32 = 2.5;
+/// The distance from the edge of the picture at which the marker of a plane outside it shows, in CSS pixels.
+const EDGE_INSET: f32 = 46.0;
+/// The widest angle off the nose at which a plane without a lock on it becomes the target, in radians.
+const TARGET_CONE: f32 = 0.5;
+/// The range of the radar, in metres.
+const RADAR_RANGE: f32 = 1500.0;
+/// The height above the ground below which the display tells the pilot to pull up, in metres.
+const LOW_HEIGHT: f32 = 60.0;
 
 const PART_NAMES: [&str; Part::ALL.len()] = ["Fuselage", "Left Wing", "Right Wing", "Tail", "Engine"];
 
@@ -71,6 +81,35 @@ pub fn plugin(app: &mut App) {
 	for id in &markers {
 		page::set_hidden(id, true);
 	}
+	let target_bars: Vec<String> = (0..Part::ALL.len())
+		.map(|index| format!("target-bar-{index}"))
+		.collect();
+	let target_attributes: Vec<[(&str, &str); 2]> = target_bars
+		.iter()
+		.map(|id| [("class", "bar"), ("id", id.as_str())])
+		.collect();
+	let rows: Vec<(&str, Vec<Piece>)> = PART_NAMES
+		.iter()
+		.zip(&target_attributes)
+		.map(|(name, attributes)| {
+			(
+				"",
+				vec![
+					Piece {
+						tag: "dt",
+						text: name,
+						attributes: &[],
+					},
+					Piece {
+						tag: "dd",
+						text: "",
+						attributes,
+					},
+				],
+			)
+		})
+		.collect();
+	page::set_rows("target-parts", "div", &rows);
 	app.add_systems(Update, (show_screens, show_display).chain().after(Flow).after(Drawn));
 }
 
@@ -354,27 +393,122 @@ fn show_settings(game: &Game) {
 	if game.binding.is_none() {
 		page::set_field("sensitivity", &game.options.sensitivity.to_string());
 		page::set_field("invert", &game.options.invert.to_string());
+		page::set_field("calm", &game.options.calm.to_string());
 	}
 }
 
-/// Move the element with this id to a place of the screen, in CSS pixels, with a scale.
-fn move_to(id: &str, place: Vec2, scale: f32) {
+/// Move the element with this id to a place of the screen, in CSS pixels.
+fn move_to(id: &str, place: Vec2) {
 	page::set_style(
 		id,
 		"transform",
-		&format!(
-			"translate({:.1}px,{:.1}px) translate(-50%,-14px) scale({scale:.2})",
-			place.x, place.y
-		),
+		&format!("translate({:.1}px,{:.1}px) translate(-50%,-14px)", place.x, place.y),
 	);
+}
+
+/// Show the state of a part on the bar with this id: how full, and whether low or gone.
+fn show_health(id: &str, health: f32) {
+	page::set_style(id, "--health", &format!("{health:.2}"));
+	page::set_class(id, "low", health > 0.0 && health < 0.5);
+	page::set_class(id, "gone", health <= 0.0);
+}
+
+/// Return `count` filled marks out of `most`, such as "●●○".
+fn pips(count: u8, most: u8, full: char) -> String {
+	(0..most).map(|index| if index < count { full } else { '○' }).collect()
+}
+
+/// Return the heading of a nose as degrees east of north, with the point of the compass.
+fn heading(nose: Vec3) -> String {
+	let degrees = (nose.x.atan2(-nose.z).to_degrees() + 360.0) % 360.0;
+	let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+	format!(
+		"{degrees:03.0}° {}",
+		points[((degrees + 22.5) / 45.0) as usize % points.len()]
+	)
+}
+
+/// What the display remembers between frames.
+#[derive(Default)]
+struct Memory {
+	/// The lines of the kill feed, each with the seconds for which it still shows.
+	feed: Vec<(String, f32)>,
+	/// The seconds for which the gun sight still shows a hit.
+	hit: f32,
+	/// The seconds for which the edge of the picture still shows a hit on the own plane.
+	hurt: f32,
+	/// The praise for a kill, and the seconds for which it still shows.
+	praise: (String, f32),
+}
+
+/// Draw the radar: the planes around the player from above, with the nose of the player at the top.
+fn draw_radar(own: &PlaneState, me: PlaneId, planes: &[(PlaneId, PlaneState)], missiles: &[sim::Missile]) {
+	let Some(context) = page::canvas("radar") else { return };
+	let (size, range) = (176.0_f64, f64::from(RADAR_RANGE));
+	let (centre, radius) = (size / 2.0, size / 2.0 - 4.0);
+	context.clear_rect(0.0, 0.0, size, size);
+	context.set_fill_style_str("rgba(13, 18, 26, 0.55)");
+	context.set_stroke_style_str("#2c3a4d");
+	context.set_line_width(1.0);
+	for (part, fill) in [(1.0, true), (0.5, false)] {
+		context.begin_path();
+		let _ = context.arc(centre, centre, radius * part, 0.0, std::f64::consts::TAU);
+		if fill {
+			context.fill();
+		}
+		context.stroke();
+	}
+	// The directions on the ground: ahead of the nose, and to its right.
+	let nose = own.forward();
+	let ahead = Vec2::new(nose.x, nose.z).normalize_or(Vec2::NEG_Y);
+	let right = Vec2::new(-ahead.y, ahead.x);
+	let dot = |place: Vec3, colour: &str, size: f64| {
+		let offset = Vec2::new(place.x - own.position.x, place.z - own.position.z);
+		let across = f64::from(offset.dot(right)) / range;
+		let along = f64::from(offset.dot(ahead)) / range;
+		// A plane beyond the range shows at the rim.
+		let far = (across * across + along * along).sqrt().max(1.0);
+		context.set_fill_style_str(colour);
+		context.begin_path();
+		let _ = context.arc(
+			centre + across / far * radius,
+			centre - along / far * radius,
+			size,
+			0.0,
+			std::f64::consts::TAU,
+		);
+		context.fill();
+	};
+	for (id, state) in planes.iter().filter(|(id, state)| *id != me && state.alive) {
+		let colour = match (state.protected, state.lock == Some(me), id) {
+			(true, ..) => "#93a3b8",
+			(false, true, _) => "#ffffff",
+			(false, false, PlaneId::Player(_)) => "#ff6b57",
+			(false, false, PlaneId::Bot(_)) => "#e0895e",
+		};
+		dot(state.position, colour, 3.5);
+	}
+	for missile in missiles
+		.iter()
+		.filter(|missile| missile.target == me && missile.is_seeking() && !missile.is_lured())
+	{
+		dot(missile.position, "#f2c230", 2.5);
+	}
+	// The player, as a mark that points up.
+	context.set_fill_style_str("#6fd08c");
+	context.begin_path();
+	context.move_to(centre, centre - 7.0);
+	context.line_to(centre + 5.0, centre + 5.0);
+	context.line_to(centre - 5.0, centre + 5.0);
+	context.close_path();
+	context.fill();
 }
 
 fn show_display(
 	game: Res<Game>,
 	time: Res<Time>,
 	camera: Single<(&Camera, &Transform), With<Camera3d>>,
-	mut feed: Local<Vec<(String, f32)>>,
-	mut hit: Local<f32>,
+	mut memory: Local<Memory>,
 ) {
 	let running = game
 		.session
@@ -382,13 +516,20 @@ fn show_display(
 		.and_then(Session::game)
 		.filter(|_| matches!(game.screen, Screen::Playing | Screen::Paused));
 	let (Some(session), Some(running)) = (&game.session, running) else {
-		feed.clear();
+		*memory = Memory::default();
 		return page::set_hidden("hud", true);
 	};
 	page::set_hidden("hud", false);
 	let me = running.me();
 	let planes = running.planes();
-	let Some(own) = running.plane(me) else { return };
+	let (Some(own), Some(own_state)) = (
+		running.plane(me),
+		planes.iter().find(|(id, _)| *id == me).map(|(_, state)| *state),
+	) else {
+		return;
+	};
+	let alive = running.respawn_in(me).is_none();
+	let dt = time.delta_secs();
 	let (camera, camera_place) = camera.into_inner();
 	let camera_frame = GlobalTransform::from(*camera_place);
 	let size = camera.logical_viewport_size().unwrap_or(Vec2::new(1280.0, 720.0));
@@ -399,31 +540,56 @@ fn show_display(
 			.filter(|at| at.x >= 0.0 && at.y >= 0.0 && at.x <= size.x && at.y <= size.y)
 	};
 
-	// The parts and the flight.
+	// The own plane: its parts as bars and as a picture, its flight, and its weapons.
 	for part in Part::ALL {
-		let (id, health) = (format!("bar-{}", part as usize), own.health(part) / part.full_health());
-		page::set_style(&id, "--health", &format!("{health:.2}"));
-		page::set_class(&id, "low", health > 0.0 && health < 0.5);
-		page::set_class(&id, "gone", health <= 0.0);
+		let health = own.health(part) / part.full_health();
+		show_health(&format!("bar-{}", part as usize), health);
+		let shape = format!("shape-{}", part as usize);
+		page::set_class(&shape, "low", health > 0.0 && health < 0.5);
+		page::set_class(&shape, "gone", health <= 0.0);
 	}
-	page::set_text("speed", &format!("{:.0} m/s", own.speed));
 	let above_ground = own.position.y - sim::arena::ground_height(own.position.x, own.position.z);
+	page::set_text("speed", &format!("{:.0} m/s", own.speed));
 	page::set_text("height", &format!("{above_ground:.0} m"));
-	page::set_text("throttle", &format!("{:.0} %", game.throttle * 100.0));
-	page::set_text("boost", &format!("{:.0} %", own.boost() * 100.0));
-	page::set_text("missiles", &running.missiles_ready(me).unwrap_or(0).to_string());
-	page::set_text("flares", &running.flares_ready(me).unwrap_or(0).to_string());
+	page::set_text("heading", &heading(own.forward()));
+	page::set_style("throttle", "--health", &format!("{:.2}", game.throttle));
+	page::set_style("boost", "--health", &format!("{:.2}", own.boost()));
+	page::set_text(
+		"missiles",
+		&pips(running.missiles_ready(me).unwrap_or(0), tuning::MISSILES, '●'),
+	);
+	page::set_text(
+		"flares",
+		&pips(running.flares_ready(me).unwrap_or(0), tuning::FLARES, '◆'),
+	);
+
+	// The events of this frame: a hit by the player, a hit on the player, and a kill.
+	(memory.hit, memory.hurt, memory.praise.1) = (
+		(memory.hit - dt).max(0.0),
+		(memory.hurt - dt).max(0.0),
+		(memory.praise.1 - dt).max(0.0),
+	);
+	for event in &game.events {
+		match event {
+			Event::Hit { by, .. } if *by == me => memory.hit = HIT_SECONDS,
+			Event::Damage { plane, .. } if *plane == me => memory.hurt = HIT_SECONDS,
+			Event::Kill { victim, killer } => {
+				let line = match killer {
+					Some(killer) => format!("{} destroyed {}", session.name_of(*killer), session.name_of(*victim)),
+					None => format!("{} crashed", session.name_of(*victim)),
+				};
+				memory.feed.push((line, FEED_SECONDS));
+				if *killer == Some(me) {
+					memory.praise = (format!("You destroyed {}", session.name_of(*victim)), PRAISE_SECONDS);
+				}
+			}
+			_ => {}
+		}
+	}
+	page::set_class("hud", "hurt", memory.hurt > 0.0 && !game.options.calm);
+	page::set_text("praise", if memory.praise.1 > 0.0 { &memory.praise.0 } else { "" });
 
 	// The gun sight, which shows each hit of the player for a moment.
-	*hit = (*hit - time.delta_secs()).max(0.0);
-	if game
-		.events
-		.iter()
-		.any(|event| matches!(event, Event::Hit { by, .. } if *by == me))
-	{
-		*hit = HIT_SECONDS;
-	}
-	let alive = running.respawn_in(me).is_none();
 	let sight = on_screen(own.position + own.forward() * SIGHT_DISTANCE).filter(|_| alive);
 	page::set_hidden("nose", sight.is_none());
 	if let Some(place) = sight {
@@ -433,15 +599,15 @@ fn show_display(
 			&format!("translate({:.1}px,{:.1}px)", place.x, place.y),
 		);
 	}
-	page::set_class("nose", "hit", *hit > 0.0);
+	page::set_class("nose", "hit", memory.hit > 0.0 && !game.options.calm);
 
 	// The box of the missile lock, which closes on the target.
-	let lock = running.lock(me).and_then(|(target, closed)| {
-		let state = planes.iter().find(|(id, _)| *id == target)?.1;
-		Some((on_screen(state.position)?, closed))
-	});
-	page::set_hidden("lock-box", lock.is_none());
-	if let Some((place, closed)) = lock {
+	let lock = running
+		.lock(me)
+		.and_then(|(target, closed)| Some((target, planes.iter().find(|(id, _)| *id == target)?.1, closed)));
+	let lock_place = lock.and_then(|(_, state, closed)| Some((on_screen(state.position)?, closed)));
+	page::set_hidden("lock-box", lock_place.is_none());
+	if let Some((place, closed)) = lock_place {
 		page::set_style(
 			"lock-box",
 			"transform",
@@ -456,43 +622,86 @@ fn show_display(
 	}
 
 	// A marker on each other plane. A plane outside the picture has its marker at the edge.
-	let others = planes.iter().filter(|(id, state)| *id != me && state.alive);
-	let mut used = 0;
-	for (id, state) in others.take(MARKERS) {
-		let marker = format!("marker-{used}");
-		used += 1;
-		let distance = state.position.distance(own.position);
+	let others: Vec<&(PlaneId, PlaneState)> = planes.iter().filter(|(id, state)| *id != me && state.alive).collect();
+	for (index, (id, state)) in others.iter().take(MARKERS).enumerate() {
+		let marker = format!("marker-{index}");
 		let seen = on_screen(state.position);
 		let place = seen.unwrap_or_else(|| {
+			// The direction of the plane across the picture, stretched until it meets the edge.
 			let local = camera_place.rotation.inverse() * (state.position - camera_place.translation);
 			let toward = Vec2::new(local.x, -local.y).normalize_or(Vec2::Y);
-			size / 2.0 + toward * (size.min_element() / 2.0 - 40.0)
+			let reach = (size / 2.0 - EDGE_INSET) / toward.abs().max(Vec2::splat(1e-3));
+			size / 2.0 + toward * reach.min_element()
 		});
 		page::set_hidden(&marker, false);
-		page::set_text(&marker, &format!("{} {distance:.0} m", session.name_of(*id)));
-		move_to(&marker, place, 1.0);
+		page::set_text(
+			&marker,
+			&format!(
+				"{} {:.0} m",
+				session.name_of(*id),
+				state.position.distance(own.position)
+			),
+		);
+		move_to(&marker, place);
 		page::set_class(&marker, "safe", seen.is_some() && state.protected);
 		page::set_class(&marker, "edge", seen.is_none());
 	}
-	for index in used..MARKERS {
+	for index in others.len().min(MARKERS)..MARKERS {
 		page::set_hidden(&format!("marker-{index}"), true);
+	}
+
+	// The target: the plane of the lock, or else the plane nearest to the nose.
+	let ahead = others
+		.iter()
+		.filter(|(_, state)| own.forward().angle_between(state.position - own.position) < TARGET_CONE);
+	let nearest = ahead.min_by(|a, b| {
+		a.1.position
+			.distance(own.position)
+			.total_cmp(&b.1.position.distance(own.position))
+	});
+	let target = lock
+		.map(|(id, state, _)| (id, state))
+		.or(nearest.map(|(id, state)| (*id, *state)));
+	page::set_hidden("target", target.is_none());
+	if let Some((id, state)) = target {
+		let locked = lock.is_some_and(|(_, _, closed)| closed >= 1.0);
+		let distance = state.position.distance(own.position);
+		page::set_text(
+			"target-name",
+			&format!(
+				"{}{} · {distance:.0} m",
+				if locked { "LOCKED · " } else { "" },
+				session.name_of(id)
+			),
+		);
+		for part in Part::ALL {
+			show_health(
+				&format!("target-bar-{}", part as usize),
+				f32::from(state.health[part as usize]) / part.full_health(),
+			);
+		}
 	}
 
 	// The most urgent warning.
 	let missile = running
 		.missiles()
 		.iter()
-		.filter(|missile| missile.target == me && missile.is_seeking())
-		.map(|missile| missile.position.distance(own.position));
-	let missile = missile.min_by(f32::total_cmp);
+		.filter(|missile| missile.target == me && missile.is_seeking() && !missile.is_lured());
+	let missile = missile
+		.map(|missile| missile.position.distance(own.position))
+		.min_by(f32::total_cmp);
 	let locked = planes.iter().any(|(_, state)| state.alive && state.lock == Some(me));
 	let outside = Vec2::new(own.position.x, own.position.z).length() > tuning::ARENA_RADIUS - 150.0;
 	let alert = if let Some(wait) = running.respawn_in(me) {
 		format!("Your plane is destroyed.\nYou fly again in {wait:.1} s.")
+	} else if own.is_falling() {
+		"You lost a wing.\nThe plane falls.".to_owned()
 	} else if let Some(distance) = missile {
-		format!("MISSILE {distance:.0} m\nBreak hard across its path!")
+		format!("MISSILE {distance:.0} m\nRelease a flare, or break hard across its path!")
 	} else if locked {
 		"An enemy locks a missile on you.\nBreak away!".to_owned()
+	} else if above_ground < LOW_HEIGHT {
+		"PULL UP".to_owned()
 	} else if outside {
 		"The edge of the arena.\nYour plane turns back.".to_owned()
 	} else if own.is_protected() {
@@ -502,19 +711,11 @@ fn show_display(
 	};
 	page::set_text("alert", &alert);
 
-	// The kills, in the order in which every machine sees them.
-	for event in &game.events {
-		if let Event::Kill { victim, killer } = event {
-			let line = match killer {
-				Some(killer) => format!("{} destroyed {}", session.name_of(*killer), session.name_of(*victim)),
-				None => format!("{} crashed", session.name_of(*victim)),
-			};
-			feed.push((line, FEED_SECONDS));
-		}
-	}
-	feed.iter_mut().for_each(|(_, left)| *left -= time.delta_secs());
-	feed.retain(|(_, left)| *left > 0.0);
-	let lines: Vec<(&str, Vec<Piece>)> = feed
+	// The kills, in the order in which every machine sees them, and the scores.
+	memory.feed.iter_mut().for_each(|(_, left)| *left -= dt);
+	memory.feed.retain(|(_, left)| *left > 0.0);
+	let lines: Vec<(&str, Vec<Piece>)> = memory
+		.feed
 		.iter()
 		.rev()
 		.take(5)
@@ -531,7 +732,6 @@ fn show_display(
 		})
 		.collect();
 	page::set_rows("feed", "li", &lines);
-
 	let scores = session.scores();
 	let numbers: Vec<String> = scores
 		.iter()
@@ -554,4 +754,6 @@ fn show_display(
 		})
 		.collect();
 	page::set_rows("score-rows", "tr", &rows);
+
+	draw_radar(&own_state, me, &planes, running.missiles());
 }

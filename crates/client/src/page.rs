@@ -242,6 +242,22 @@ pub fn set_rows(id: &str, row_tag: &str, rows: &[(&str, Vec<Piece>)]) {
 	}
 }
 
+/// Switch the page to full screen, or back. A browser allows this only just after a click or a key.
+pub fn toggle_fullscreen() {
+	let document = document();
+	if document.fullscreen_element().is_some() {
+		document.exit_fullscreen();
+	} else if let Some(root) = document.document_element() {
+		let _ = root.request_fullscreen();
+	}
+}
+
+/// Return the drawing context of the canvas with this id, for flat pictures such as the radar.
+pub fn canvas(id: &str) -> Option<web_sys::CanvasRenderingContext2d> {
+	let canvas: web_sys::HtmlCanvasElement = element(id).unchecked_into();
+	canvas.get_context("2d").ok()??.dyn_into().ok()
+}
+
 /// Return the value of a parameter in the address of the page.
 pub fn query(name: &str) -> Option<String> {
 	let search = window().location().search().ok()?;

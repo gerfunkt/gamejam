@@ -105,6 +105,9 @@ pub struct Options {
 	pub sensitivity: f32,
 	/// Whether a mouse above the centre lowers the nose.
 	pub invert: bool,
+	/// Whether the display shows no flashes on a hit.
+	#[serde(default)]
+	pub calm: bool,
 	/// The key of each action, in the order of [`Bind::ALL`].
 	keys: Vec<String>,
 	/// The number of bots that the player chose last as a host.
@@ -120,6 +123,7 @@ impl Default for Options {
 			name: String::new(),
 			sensitivity: 1.0,
 			invert: false,
+			calm: false,
 			keys: Bind::ALL.iter().map(|bind| bind.default_key().to_owned()).collect(),
 			bots: 4,
 			skill: Skill::Pilot,
@@ -189,6 +193,9 @@ struct State {
 	down: HashSet<String>,
 	/// The codes of the keys that went down since the last look.
 	pressed: Vec<String>,
+	/// The codes of the keys that went down since the last step of a match. A key that goes
+	/// down and up between two steps still counts for one step.
+	tapped: HashSet<String>,
 	/// The place of the pointer in the page, in CSS pixels.
 	pointer: Option<Vec2>,
 	left: bool,
@@ -224,6 +231,7 @@ pub fn watch() {
 			}
 			if !typing && !event.repeat() {
 				state.down.insert(event.code());
+				state.tapped.insert(event.code());
 				state.pressed.push(event.code());
 			}
 		});
@@ -305,7 +313,8 @@ pub struct Lens {
 /// and the throttle keys change.
 pub fn read(options: &Options, orientation: Quat, lens: Lens, throttle: &mut f32, dt: f32) -> Controls {
 	STATE.with_borrow_mut(|state| {
-		let held = |bind: Bind| state.down.contains(options.key(bind));
+		let tapped = std::mem::take(&mut state.tapped);
+		let held = |bind: Bind| state.down.contains(options.key(bind)) || tapped.contains(options.key(bind));
 		let axis = |more: Bind, less: Bind| f32::from(u8::from(held(more))) - f32::from(u8::from(held(less)));
 		let window = page::window();
 		let size = Vec2::new(
