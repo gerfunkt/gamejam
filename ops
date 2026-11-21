@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":1,"timestamp":1795282909,"nonce":"6/rB0hTt6WSxdOzIDgZJYL2oWHM=","title":"Add sound","message":"Open point 7, design step 2: engine, gun, hits, and a break. Check the Bevy web audio defect (issue 24896) on 0.20 first.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":5,"timestamp":1795282928,"nonce":"RaTm0ZndNgO77RFqp0+GI6hRqOw=","added":["feature"],"removed":null}]}
