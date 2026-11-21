@@ -198,7 +198,7 @@ mod tests {
 	use rustls::pki_types::pem::PemObject;
 	use rustls::pki_types::{CertificateDer, ServerName};
 	use rustls::{ClientConfig, RootCertStore};
-	use sim::room::{RoomStatus, parse_room_list};
+	use sim::room::{OPEN_ROOM_ID, OPEN_ROOM_TITLE, RoomStatus, parse_room_list};
 	use tokio::io::AsyncWriteExt;
 	use tokio::net::TcpStream;
 	use tokio::time::timeout;
@@ -225,7 +225,10 @@ mod tests {
 		assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
 		let body = response.into_body().collect().await.expect("a body").to_bytes();
 		let rooms = parse_room_list(std::str::from_utf8(&body).expect("text")).expect("a room list");
-		assert_eq!((rooms[0].id.as_str(), rooms[0].title.as_str()), ("0", "Open room"));
+		assert_eq!(
+			(rooms[0].id.as_str(), rooms[0].title.as_str()),
+			(OPEN_ROOM_ID, OPEN_ROOM_TITLE)
+		);
 	}
 
 	#[tokio::test]

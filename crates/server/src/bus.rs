@@ -406,8 +406,8 @@ mod tests {
 
 	use futures_util::{SinkExt, StreamExt};
 	use sim::room::{
-		CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, MAX_TITLE_CHARS, OPEN_ROOM_ID, RoomStatus,
-		frame, split_frame,
+		CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, MAX_TITLE_CHARS, OPEN_ROOM_ID,
+		OPEN_ROOM_TITLE, RoomStatus, frame, split_frame,
 	};
 	use tokio::io::DuplexStream;
 	use tokio::time::timeout;
@@ -514,7 +514,7 @@ mod tests {
 		let mut first = Client::join(&bus, Join::Open).await;
 		let status = first.status().await;
 		assert_eq!(status.id, OPEN_ROOM_ID, "the open room has its own id");
-		assert_eq!(status.title, "Open room");
+		assert_eq!(status.title, OPEN_ROOM_TITLE);
 		assert_eq!(
 			(status.owner, status.members, status.you),
 			(1, vec![1], 1),
@@ -792,7 +792,7 @@ mod tests {
 		.expect("both members must leave");
 		let rooms = bus.rooms();
 		assert_eq!(rooms.len(), 1, "only the open room is left");
-		assert_eq!((rooms[0].id.as_str(), rooms[0].owner), ("0", None));
+		assert_eq!((rooms[0].id.as_str(), rooms[0].owner), (OPEN_ROOM_ID, None));
 	}
 
 	#[tokio::test]
@@ -811,7 +811,7 @@ mod tests {
 			.map(|room| (room.id, room.title, room.members, room.owner, room.info))
 			.collect();
 		let expected = [
-			("0", "Open room", 1, Some(1), ""),
+			(OPEN_ROOM_ID, OPEN_ROOM_TITLE, 1, Some(1), ""),
 			("1", "Second", 1, Some(2), "Match"),
 			("2", "Room 2", 1, Some(3), ""),
 		]
