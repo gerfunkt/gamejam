@@ -1,6 +1,6 @@
 use glam::{Quat, Vec2, Vec3};
 
-use crate::tuning::{BANK_FULL_ANGLE, BANK_START_ANGLE, ROLL_FULL_ANGLE, STEER_FULL_ANGLE};
+use crate::tuning::{BANK_FULL_ANGLE, BANK_START_ANGLE, PITCH_RATE, ROLL_FULL_ANGLE, STEER_FULL_ANGLE, YAW_RATE};
 
 /// The deflection of the three control axes, each from -1 to 1.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -62,9 +62,13 @@ pub fn steer_toward(orientation: Quat, aim: Vec3) -> Steering {
 	let bank = ((angle - BANK_START_ANGLE) / (BANK_FULL_ANGLE - BANK_START_ANGLE)).clamp(0.0, 1.0);
 	let roll_error = bank * into_turn + (1.0 - bank) * to_level;
 
+	// The nose must move straight toward the aim. Pitch is stronger than yaw, so at full
+	// deflection on both axes the nose would climb in each banked turn. Thus the weaker axis
+	// sets the pace until the bank puts the aim above the nose.
+	let pace = (PITCH_RATE / side.y.abs().max(1e-6)).min(YAW_RATE / side.x.abs().max(1e-6));
 	Steering {
-		pitch: deflection * side.y,
-		yaw: deflection * side.x,
+		pitch: deflection * side.y * pace / PITCH_RATE,
+		yaw: deflection * side.x * pace / YAW_RATE,
 		roll: (roll_error / ROLL_FULL_ANGLE).clamp(-1.0, 1.0),
 	}
 }

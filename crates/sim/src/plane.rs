@@ -211,6 +211,11 @@ impl Plane {
 		*health <= 0.0
 	}
 
+	/// Make every part whole again. This is a hook of tests and playtests.
+	pub fn repair(&mut self) {
+		self.health = Part::ALL.map(Part::full_health);
+	}
+
 	/// Destroy the plane at once, as a crash does.
 	pub fn destroy(&mut self) {
 		self.health[Part::Fuselage as usize] = 0.0;

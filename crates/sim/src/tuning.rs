@@ -114,6 +114,69 @@ pub const BULLET_SPREAD: f32 = 0.004;
 /// The distance of the muzzle ahead of the centre of the plane, in metres.
 pub const MUZZLE: f32 = 4.5;
 
+// Missiles.
+
+/// The number of missiles on a plane.
+pub const MISSILES: u8 = 2;
+/// The time until an empty place in the rack holds a missile again, in seconds.
+pub const MISSILE_RELOAD: f32 = 8.0;
+/// The time between two launches of one plane, in seconds.
+pub const MISSILE_INTERVAL: f32 = 1.0;
+/// How long the seeker must hold one target before a launch, in seconds. The target sees the
+/// lock in this time, and can break away.
+pub const LOCK_SECONDS: f32 = 1.2;
+/// The farthest target that the seeker of a plane sees, in metres.
+pub const LOCK_RANGE: f32 = 900.0;
+/// The widest angle between the nose and a target that the seeker of a plane sees, in radians.
+pub const LOCK_CONE: f32 = 0.22;
+/// The speed of a missile when it leaves its plane, in m/s.
+pub const MISSILE_LAUNCH_SPEED: f32 = 120.0;
+/// How fast the motor of a missile raises its speed, in m/s².
+pub const MISSILE_THRUST: f32 = 120.0;
+/// The speed of a missile, in m/s.
+pub const MISSILE_SPEED: f32 = 220.0;
+/// How long a missile flies, in seconds.
+pub const MISSILE_FUEL: f32 = 6.0;
+/// How fast a missile turns, in rad/s.
+pub const MISSILE_TURN_RATE: f32 = 0.7;
+/// The widest angle between the nose of a missile and its target that its seeker sees, in radians.
+pub const SEEKER_CONE: f32 = 0.45;
+/// The part of the seeker cone that a missile uses to fly ahead of its target.
+pub const SEEKER_LEAD: f32 = 0.7;
+/// A missile bursts when it passes this near to a plane, in metres.
+pub const MISSILE_FUSE: f32 = 7.0;
+/// The distance from a burst within which a part takes damage, in metres.
+pub const BURST_RADIUS: f32 = 9.0;
+/// The health that a burst takes from a part at its centre.
+pub const BURST_DAMAGE: f32 = 70.0;
+/// The health that a burst takes from a part at the edge of its reach.
+pub const BURST_EDGE_DAMAGE: f32 = 20.0;
+
+// Bots.
+
+/// How far ahead on its ring a bot without a target aims, in radians.
+pub const BOT_IDLE_LEAD: f32 = 0.5;
+/// The radius of the ring on which a bot without a target circles, in metres.
+pub const BOT_IDLE_RADIUS: f32 = 600.0;
+/// The height at which a bot without a target circles, in metres.
+pub const BOT_IDLE_HEIGHT: f32 = 400.0;
+/// Inside this distance of its target, a bot that matches speed does so, in metres.
+pub const BOT_CHASE_RANGE: f32 = 400.0;
+/// The distance behind its target at which such a bot holds its speed, in metres.
+pub const BOT_CHASE_DISTANCE: f32 = 180.0;
+/// Below this height, and this far below the ceiling, a bot leaves the fight to fly level, in metres.
+pub const BOT_SAFE_HEIGHT: f32 = 150.0;
+
+/// How much a bot prefers a plane ahead of its nose: each radian off the nose counts as this
+/// part of the distance again.
+pub const BOT_ANGLE_WEIGHT: f32 = 1.0;
+/// Inside this distance, a bot does not turn after a target that is far off its nose, in metres.
+pub const BOT_EXTEND_RANGE: f32 = 250.0;
+/// The angle off the nose beyond which a bot does not turn after a near target, in radians.
+pub const BOT_EXTEND_ANGLE: f32 = 1.3;
+/// The time that a bot allows for the end of a dive, in seconds.
+pub const BOT_PULL_UP_SECONDS: f32 = 2.5;
+
 // A match.
 
 /// The number of steps between two states that a machine sends for each of its planes.
@@ -122,7 +185,8 @@ pub const STEPS_PER_STATE: u64 = 2;
 pub const RESPAWN_SECONDS: f32 = 3.0;
 /// How long a plane is protected from damage after its spawn, in seconds.
 pub const SPAWN_PROTECTION: f32 = 5.0;
-/// How long after its last hit an attacker gets the kill for a crash of its target, in seconds.
+/// How long after its last hit an attacker gets the kill for a crash of a target that lost no
+/// part, in seconds. For a target that lost a part, the time has no limit.
 pub const KILL_CREDIT_SECONDS: f32 = 10.0;
 /// The nearest distance of a spawn from the centre, in metres.
 pub const SPAWN_MIN_RADIUS: f32 = 500.0;
