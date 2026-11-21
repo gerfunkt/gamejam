@@ -92,7 +92,7 @@ The plan follows the game-design method: prove the loop with grey boxes, then ad
 
 **How to play it.**
 
-1. Run `cargo xtask serve --release` (or `mise run serve`, which runs the same). It builds the client, starts the server, and prints the addresses. Stop it with Ctrl+C, and run it again after each change of the code.
+1. Run `cargo xtask serve` (or `mise run serve`, which runs the same). It builds both clients, starts the server, and prints the addresses. Stop it with Ctrl+C, and run it again after each change of the code.
 2. Open `https://<address of the host>:5201` in a current Chromium browser, on this machine or on the LAN. Accept the certificate warning once.
 3. Enter a name at the first visit. Choose "Solo" to fight the bots, or "Online" on several machines to fight each other: create a room, or join one from the list. Choose the bots in the lobby, and press "Start" or "Start match".
 
@@ -100,16 +100,15 @@ The plan follows the game-design method: prove the loop with grey boxes, then ad
 
 | Action | Input |
 |---|---|
-| Steer | Point with the mouse. The plane turns toward the cursor, and a cursor at the centre flies straight. |
+| Steer | Point with the mouse. The plane turns toward the cursor, and a cursor at the centre flies straight. No key steers. |
 | Guns | Left mouse button, or Space |
 | Missile | Right mouse button, or F. The lock box must close on the target first. |
+| Flare | E |
 | Throttle | Mouse wheel, or W and S |
-| Turn | A and D, added to the mouse |
-| Nose down and up | Arrow Up and Arrow Down |
 | Boost | Left Shift |
 | Pause menu, which also pauses a solo match | Escape |
 
-**Phone controls.** A phone gets the touch layout: hold it sideways. Tilt aims from the pose at the start of the match, and "Centre" takes the current pose as straight ahead. A finger on the open field aims while it is down. Thumb buttons: GUN (hold), MSL, BOOST (hold), and + and - for the throttle; "II" pauses. The pause menu and "Settings" switch tilt on and off. Safari on iOS asks for the sensor at the first tap. Chrome on Android enters fullscreen at the first tap and locks the screen sideways.
+**Phone controls.** A phone gets the touch layout: hold it sideways. The stick under the left thumb steers, and the tilt of the phone steers too, from the pose in which the match starts. "TILT" turns the tilt off and on, and "CENTRE" takes the current pose as straight ahead. Thumb buttons: GUN (hold), MSL, FLARE, and BOOST (hold), and the THR slider sets the throttle; "II" pauses. Safari on iOS asks for the sensor at the first tap. A tap on "Start Match" enters full screen and holds the screen sideways where the browser allows it.
 
 **What to watch in the playtest.**
 
