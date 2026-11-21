@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292357,"nonce":"RXFCfzf7EiysmFzZjtOZ97Lp1Uk=","message":"Implemented wire encoding, adaptive snapshot interpolation timeline, lobby state, room text frames, and multi-node ordered bus tests in crates/sim.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292357,"nonce":"rilrwJl7w1S38zDjEDcDJqeUXIc=","status":2}]}
