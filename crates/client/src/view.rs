@@ -9,6 +9,7 @@ use std::{
 
 use bevy::{
 	asset::RenderAssetUsages,
+	ecs::system::SystemParam,
 	gltf::{Gltf, GltfMaterial, GltfMesh},
 	mesh::Indices,
 	prelude::*,
@@ -23,6 +24,7 @@ use sim::{
 use crate::{
 	flow::{Flow, Game},
 	page,
+	propeller::Blur,
 };
 
 const SKY: Color = Color::srgb(0.55, 0.70, 0.86);
@@ -66,6 +68,15 @@ struct ModelEntry {
 	file: String,
 	/// The kills from which a pilot flies this model.
 	kills: u16,
+	/// The disc of the propeller, if the model has one. The build took its blades out.
+	propeller: Option<Propeller>,
+}
+
+/// The place and the reach of a propeller, in the frame of its plane, in metres.
+#[derive(Clone, Copy, Deserialize)]
+struct Propeller {
+	centre: Vec3,
+	radius: f32,
 }
 
 /// The mesh of each part of a plane model, in the order of [`Part::ALL`], and its texture.
@@ -74,6 +85,7 @@ type LoadedModel = ([Handle<Mesh>; Part::ALL.len()], Option<Handle<Image>>);
 /// A plane model of the build. The build cut it into one mesh for each part of the rules.
 struct PlaneModel {
 	kills: u16,
+	propeller: Option<Propeller>,
 	file: Handle<Gltf>,
 	/// The meshes and the texture, once the file is loaded.
 	parts: Option<LoadedModel>,
@@ -219,6 +231,7 @@ fn load_plane_models(
 			.into_iter()
 			.map(|entry| PlaneModel {
 				kills: entry.kills,
+				propeller: entry.propeller,
 				file: assets.load(format!("planes/{}", entry.file)),
 				parts: None,
 			})
@@ -383,11 +396,18 @@ fn paint(id: PlaneId, me: PlaneId) -> Color {
 	}
 }
 
+/// What a plane is drawn from: the boxes of the rules, the models of the build, and the blur of a propeller.
+#[derive(SystemParam)]
+struct Looks<'w> {
+	models: Res<'w, Models>,
+	plane_models: Res<'w, PlaneModels>,
+	blur: Res<'w, Blur>,
+}
+
 fn show_planes(
 	mut commands: Commands,
 	game: Res<Game>,
-	models: Res<Models>,
-	plane_models: Res<PlaneModels>,
+	looks: Looks,
 	mut materials: ResMut<Assets<StandardMaterial>>,
 	mut planes: Query<(Entity, &PlaneView, &mut Transform, &mut Visibility), Without<PartView>>,
 	mut parts: Query<(&PartView, &mut Visibility), Without<PlaneView>>,
@@ -399,7 +419,7 @@ fn show_planes(
 		// A plane that left, and a plane whose pilot earned another model, get a new picture.
 		let state = states
 			.get(&view.0)
-			.filter(|state| plane_models.for_kills(state.kills) == view.1);
+			.filter(|state| looks.plane_models.for_kills(state.kills) == view.1);
 		let Some(state) = state else {
 			commands.entity(entity).despawn();
 			continue;
@@ -422,8 +442,9 @@ fn show_planes(
 	}
 	for (&id, state) in states.iter().filter(|(id, _)| !drawn.contains(*id)) {
 		let colour = paint(id, me.unwrap_or(id));
-		let model = plane_models.for_kills(state.kills);
-		let loaded = model.and_then(|index| plane_models.0[index].parts.as_ref());
+		let model = looks.plane_models.for_kills(state.kills);
+		let loaded = model.and_then(|index| looks.plane_models.0[index].parts.as_ref());
+		let propeller = model.and_then(|index| looks.plane_models.0[index].propeller);
 		let body = materials.add(match loaded {
 			// The texture of the model shows through a light tint in the colour of the pilot.
 			Some((_, texture)) => StandardMaterial {
@@ -450,18 +471,22 @@ fn show_planes(
 					),
 					None => {
 						let material = if part == Part::Engine {
-							models.engine.clone()
+							looks.models.engine.clone()
 						} else {
 							body.clone()
 						};
 						(
-							Mesh3d(models.parts[part as usize].clone()),
+							Mesh3d(looks.models.parts[part as usize].clone()),
 							MeshMaterial3d(material),
 							Transform::from_translation(part.centre()),
 						)
 					}
 				};
-				plane.spawn((PartView(id, part), piece));
+				let mut piece = plane.spawn((PartView(id, part), piece));
+				// The propeller stops with its engine: the blur is a child of that part, so it hides with it.
+				if let (Part::Engine, Some(propeller)) = (part, propeller) {
+					piece.with_child(looks.blur.disc(propeller.centre, propeller.radius));
+				}
 			}
 		});
 	}

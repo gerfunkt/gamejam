@@ -16,6 +16,7 @@ mod hud;
 mod input;
 mod net;
 mod page;
+mod propeller;
 mod view;
 
 fn main() {
@@ -43,6 +44,12 @@ fn main() {
 				})
 				.disable::<bevy::app::PanicHandlerPlugin>(),
 		)
-		.add_plugins((flow::plugin, view::plugin, hud::plugin, audio::plugin))
+		.add_plugins((
+			flow::plugin,
+			view::plugin,
+			propeller::plugin,
+			hud::plugin,
+			audio::plugin,
+		))
 		.run();
 }
