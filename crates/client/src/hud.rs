@@ -29,6 +29,8 @@ const PRAISE_SECONDS: f32 = 2.5;
 const EDGE_INSET: f32 = 46.0;
 /// The widest angle off the nose at which a plane without a lock on it becomes the target, in radians.
 const TARGET_CONE: f32 = 0.5;
+/// The colour of an enemy on the radar.
+const BANDIT: &str = "#ff2a2a";
 /// The range of the radar, in metres.
 const RADAR_RANGE: f32 = 1500.0;
 /// The height above the ground below which the display tells the pilot to pull up, in metres.
@@ -478,51 +480,89 @@ fn draw_radar(
 	let nose = own.forward();
 	let ahead = Vec2::new(nose.x, nose.z).normalize_or(Vec2::NEG_Y);
 	let right = Vec2::new(-ahead.y, ahead.x);
-	let dot = |place: Vec3, colour: &str, size: f64| {
+	// Return the place of a point of the sky on the radar. A point beyond the range shows at the rim.
+	let spot = |place: Vec3| {
 		let offset = Vec2::new(place.x - own.position.x, place.z - own.position.z);
 		let across = f64::from(offset.dot(right)) / range;
 		let along = f64::from(offset.dot(ahead)) / range;
-		// A plane beyond the range shows at the rim.
 		let far = (across * across + along * along).sqrt().max(1.0);
-		context.set_fill_style_str(colour);
-		context.begin_path();
-		let _ = context.arc(
-			centre + across / far * radius,
-			centre - along / far * radius,
-			size,
-			0.0,
-			std::f64::consts::TAU,
-		);
-		context.fill();
+		(centre + across / far * radius, centre - along / far * radius)
 	};
+	// Each kind of thing has its own shape as well as its own colour, so that a look tells them apart.
+	// A power-up is a ring in the colour that it has in the sky.
+	context.set_line_width(2.0);
 	for power_up in power_ups.iter().filter(|power_up| power_up.present) {
-		let colour = match power_up.kind {
+		let (x, y) = spot(power_up.position);
+		context.set_stroke_style_str(match power_up.kind {
 			PowerUpKind::Speed => "#4fc8ff",
-			PowerUpKind::Weapons => "#ff9a3d",
-			PowerUpKind::Repair => "#6fd08c",
-		};
-		dot(power_up.position, colour, 2.0);
+			PowerUpKind::Weapons => "#ffb347",
+			PowerUpKind::Repair => "#7dffa0",
+		});
+		context.begin_path();
+		let _ = context.arc(x, y, 3.5, 0.0, std::f64::consts::TAU);
+		context.stroke();
 	}
+	// An enemy is a red arrow that points where it flies.
 	for (id, state) in planes.iter().filter(|(id, state)| *id != me && state.alive) {
-		let colour = match (state.protected, state.lock == Some(me), id) {
-			(true, ..) => "#93a3b8",
-			(false, true, _) => "#ffffff",
-			(false, false, PlaneId::Player(_)) => "#ff6b57",
-			(false, false, PlaneId::Bot(_)) => "#e0895e",
-		};
-		dot(state.position, colour, 3.5);
+		let (x, y) = spot(state.position);
+		let course = state.forward();
+		let course = Vec2::new(course.x, course.z);
+		let turn = f64::from(course.dot(right)).atan2(f64::from(course.dot(ahead)));
+		context.save();
+		let _ = context.translate(x, y);
+		let _ = context.rotate(turn);
+		context.begin_path();
+		context.move_to(0.0, -7.0);
+		context.line_to(5.0, 5.0);
+		context.line_to(0.0, 2.5);
+		context.line_to(-5.0, 5.0);
+		context.close_path();
+		if state.protected {
+			// A plane that cannot be hit yet is an empty arrow.
+			context.set_line_width(1.5);
+			context.set_stroke_style_str(BANDIT);
+			context.stroke();
+		} else {
+			context.set_fill_style_str(BANDIT);
+			context.fill();
+			if matches!(id, PlaneId::Player(_)) {
+				// A person has a light edge, and a bot has none.
+				context.set_line_width(1.0);
+				context.set_stroke_style_str("#ffffff");
+				context.stroke();
+			}
+		}
+		context.restore();
+		if state.lock == Some(me) {
+			// A ring marks the enemy whose missile lock is on the player.
+			context.set_line_width(1.5);
+			context.set_stroke_style_str("#ffffff");
+			context.begin_path();
+			let _ = context.arc(x, y, 9.0, 0.0, std::f64::consts::TAU);
+			context.stroke();
+		}
 	}
+	// A missile that follows the player is a yellow diamond.
+	context.set_fill_style_str("#ffe14d");
 	for missile in missiles
 		.iter()
 		.filter(|missile| missile.target == me && missile.is_seeking() && !missile.is_lured())
 	{
-		dot(missile.position, "#f2c230", 2.5);
+		let (x, y) = spot(missile.position);
+		context.begin_path();
+		context.move_to(x, y - 4.0);
+		context.line_to(x + 4.0, y);
+		context.line_to(x, y + 4.0);
+		context.line_to(x - 4.0, y);
+		context.close_path();
+		context.fill();
 	}
-	// The player, as a mark that points up.
-	context.set_fill_style_str("#6fd08c");
+	// The player, as a white mark that points up.
+	context.set_fill_style_str("#f4f8ff");
 	context.begin_path();
 	context.move_to(centre, centre - 7.0);
 	context.line_to(centre + 5.0, centre + 5.0);
+	context.line_to(centre, centre + 2.5);
 	context.line_to(centre - 5.0, centre + 5.0);
 	context.close_path();
 	context.fill();
