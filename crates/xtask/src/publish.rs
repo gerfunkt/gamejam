@@ -39,6 +39,8 @@ pub fn run(root: &Path, server: &str) -> Result<()> {
 	);
 	let named = format!(r#"<meta name="game-server" content="{server}">"#);
 	fs::write(&index, page.replace(EMPTY_SETTING, &named))?;
+	// Pages can also serve the branch itself. This file tells it to serve the files as they are.
+	fs::write(stage.join(".nojekyll"), "")?;
 
 	// A separate index leaves the index and the files of the checkout as they are.
 	let git_dir = PathBuf::from(git(root, None, &["rev-parse", "--absolute-git-dir"])?);
