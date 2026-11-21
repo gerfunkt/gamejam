@@ -20,7 +20,7 @@ use sim::room::{
 	RoomStatus, clean_info, clean_title, frame,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
@@ -91,8 +91,13 @@ impl Bus {
 	where
 		S: AsyncRead + AsyncWrite + Unpin,
 	{
-		let (room, number, mut queue) = match self.enter(join) {
-			Ok(entry) => entry,
+		let Seat {
+			room,
+			number,
+			mut queue,
+			mut fate,
+		} = match self.enter(join) {
+			Ok(seat) => seat,
 			Err(code) => {
 				finish(&mut ws, close_frame(code)).await;
 				return;
@@ -107,17 +112,15 @@ impl Bus {
 					Some(Ok(_)) => {}
 				},
 				outgoing = queue.recv() => match outgoing {
-					Some(Message::Close(closing)) => {
-						finish(&mut ws, closing).await;
-						break;
-					}
 					Some(message) => {
 						if !matches!(timeout(WRITE_TIMEOUT, ws.send(message)).await, Ok(Ok(()))) {
 							break;
 						}
 					}
 					None => {
-						finish(&mut ws, close_frame(CloseCode::FellBehind)).await;
+						// The room sent the reason before it dropped the queue.
+						let why = fate.try_recv().unwrap_or(CloseCode::FellBehind);
+						finish(&mut ws, close_frame(why)).await;
 						break;
 					}
 				},
@@ -143,7 +146,7 @@ impl Bus {
 	}
 
 	/// Add a member to the room that `join` names, and tell the room.
-	fn enter(&self, join: Join) -> Result<(String, u32, mpsc::Receiver<Message>), CloseCode> {
+	fn enter(&self, join: Join) -> Result<Seat, CloseCode> {
 		let state = &mut *self.lock();
 		let position = match join {
 			Join::Open => state.rooms.iter().position(|room| room.id == OPEN_ROOM_ID),
@@ -172,10 +175,20 @@ impl Bus {
 		let number = state.next_player;
 		state.next_player += 1;
 		let (queue, receiver) = mpsc::channel(QUEUE_FRAMES);
-		room.members.push(Member { number, queue });
+		let (fate_sender, fate) = oneshot::channel();
+		room.members.push(Member {
+			number,
+			queue,
+			fate: fate_sender,
+		});
 		// A room that was just joined is not empty, so nothing to tidy even if the status removed a member.
 		room.announce();
-		Ok((room.id.clone(), number, receiver))
+		Ok(Seat {
+			room: room.id.clone(),
+			number,
+			queue: receiver,
+			fate,
+		})
 	}
 
 	/// Send a binary message of a member to the whole room, the sender included.
@@ -222,9 +235,7 @@ impl Bus {
 					let Some(position) = room.members.iter().position(|member| member.number == number) else {
 						return false;
 					};
-					let removed = room.members.remove(position);
-					// A full queue loses this frame, and the member then gets the code of a slow one.
-					let _ = removed.queue.try_send(Message::Close(close_frame(CloseCode::Removed)));
+					room.members.remove(position).remove(CloseCode::Removed);
 					room.announce();
 					true
 				}
@@ -276,6 +287,25 @@ struct Room {
 struct Member {
 	number: u32,
 	queue: mpsc::Sender<Message>,
+	/// Where the room says why it removed the member. It cannot get lost behind a full queue.
+	fate: oneshot::Sender<CloseCode>,
+}
+
+impl Member {
+	/// Remove the member from its room for `why`, and close its queue.
+	fn remove(self, why: CloseCode) {
+		// The connection may have ended already, and then nobody needs the reason.
+		let _ = self.fate.send(why);
+	}
+}
+
+/// What a connection holds for a member that joined a room.
+struct Seat {
+	room: String,
+	number: u32,
+	/// The frames for the member. It ends when the room removed the member.
+	queue: mpsc::Receiver<Message>,
+	fate: oneshot::Receiver<CloseCode>,
 }
 
 impl Room {
@@ -349,14 +379,16 @@ mod tests {
 	use std::time::Duration;
 
 	use futures_util::{SinkExt, StreamExt};
-	use sim::room::{Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, RoomStatus, split_frame};
+	use sim::room::{
+		CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, RoomStatus, split_frame,
+	};
 	use tokio::io::DuplexStream;
 	use tokio::time::timeout;
 	use tokio_tungstenite::WebSocketStream;
 	use tokio_tungstenite::tungstenite::Message;
 	use tokio_tungstenite::tungstenite::protocol::Role;
 
-	use super::Bus;
+	use super::{Bus, QUEUE_FRAMES};
 
 	/// The client end of a member, with real WebSocket framing.
 	struct Client {
@@ -764,5 +796,26 @@ mod tests {
 		sender.await.expect("the sender task must finish");
 		assert_eq!(bus.rooms()[0].members, 1, "the member that fell behind was removed");
 		assert_eq!(slow.close_code().await, 4004, "it learns why, when it reads again");
+	}
+
+	#[tokio::test]
+	async fn a_removed_member_with_a_full_queue_still_learns_why() {
+		let bus = Bus::new();
+		let mut owner = bus.enter(Join::Open).expect("the owner joins");
+		let mut victim = bus.enter(Join::Open).expect("the victim joins");
+		// The victim never reads. Fill its queue to the last place, but not past it.
+		for _ in victim.queue.len()..QUEUE_FRAMES {
+			bus.relay(&owner.room, owner.number, b"x");
+			while owner.queue.try_recv().is_ok() {}
+		}
+		assert_eq!(bus.rooms()[0].members, 2, "a full queue is not yet too far behind");
+		bus.control(&owner.room, owner.number, &Control::Kick(victim.number).to_frame());
+		assert_eq!(bus.rooms()[0].members, 1, "the owner removed the victim");
+		while victim.queue.recv().await.is_some() {}
+		assert_eq!(
+			victim.fate.try_recv(),
+			Ok(CloseCode::Removed),
+			"the reason is not lost behind the queue"
+		);
 	}
 }
