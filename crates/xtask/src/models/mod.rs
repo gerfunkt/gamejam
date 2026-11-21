@@ -44,7 +44,7 @@ fn convert(fbx: &[u8], orientation: Orientation) -> Result<Model> {
 	orient(&mut triangles, orientation)?;
 	let scale = fit(&mut triangles, rules_box())?;
 	Ok(Model {
-		parts: Regions::of_rules().split(&triangles),
+		parts: Regions::for_model(&triangles).split(&triangles),
 		scale,
 	})
 }
@@ -168,7 +168,12 @@ mod tests {
 			"the wings are about as big as each other, so the span is along X: {left} and {right} triangles"
 		);
 		check_budget(&plane.key, &model.parts).unwrap();
-		let regions = Regions::of_rules();
+		let whole: Vec<Triangle> = model
+			.parts
+			.iter()
+			.flat_map(|(_, triangles)| triangles.clone())
+			.collect();
+		let regions = Regions::for_model(&whole);
 		let (low, high) = rules_box();
 		let mut facing_outward = 0;
 		let mut all = 0;
