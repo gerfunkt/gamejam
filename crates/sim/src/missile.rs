@@ -205,6 +205,11 @@ impl Launcher {
 		self.ready
 	}
 
+	/// Fill the rack at once. The missiles that left keep their numbers.
+	pub(crate) fn refill(&mut self) {
+		(self.ready, self.reload) = (tuning::MISSILES, 0.0);
+	}
+
 	/// Advance the seeker and the rack of the plane `me` by `dt` seconds.
 	///
 	/// Return a missile when the pilot asks for a launch, the lock closed, and a missile is ready.
@@ -332,6 +337,11 @@ impl FlareRack {
 	/// Return the number of flares that are ready.
 	pub(crate) fn ready(&self) -> u8 {
 		self.ready
+	}
+
+	/// Fill the rack at once.
+	pub(crate) fn refill(&mut self) {
+		(self.ready, self.reload) = (tuning::FLARES, 0.0);
 	}
 
 	/// Advance the rack by `dt` seconds, and return whether it releases a flare now.

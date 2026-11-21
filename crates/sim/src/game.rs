@@ -514,10 +514,22 @@ impl Match {
 			return;
 		};
 		power_up.take();
-		self.events.push(Event::PowerUp {
-			plane,
-			kind: power_up.kind,
-		});
+		let kind = power_up.kind;
+		// A plane that is down, or that falls, cannot use the power-up, but the power-up is gone.
+		let user = self
+			.locals
+			.iter_mut()
+			.find(|local| local.id == plane && local.respawn.is_none() && !local.plane.is_falling());
+		if let Some(local) = user {
+			match kind {
+				PowerUpKind::Weapons => {
+					local.launcher.refill();
+					local.flares.refill();
+				}
+				PowerUpKind::Speed | PowerUpKind::Repair => {}
+			}
+		}
+		self.events.push(Event::PowerUp { plane, kind });
 	}
 
 	/// Take a destroyed plane out of the fight, and tell every machine.

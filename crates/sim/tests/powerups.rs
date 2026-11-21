@@ -5,7 +5,7 @@ mod common;
 use common::{Bus, toward};
 use glam::{Quat, Vec3};
 use sim::{
-	Event, Match, Part, PowerUp, PowerUpKind, arena, tuning,
+	Controls, Event, Match, Part, PowerUp, PowerUpKind, arena, tuning,
 	wire::{Message, PlaneId, Settings},
 };
 
@@ -230,4 +230,40 @@ fn a_claim_for_a_place_that_does_not_exist_is_ignored() {
 	};
 	game.receive(0.0, FIRST, &claim);
 	assert!(game.drain_events().is_empty());
+}
+
+#[test]
+fn a_weapons_power_up_fills_the_missile_rack_and_the_flare_rack_at_once() {
+	let mut bus = bus(&[FIRST, SECOND]);
+	bus.place(FIRST, Vec3::new(0.0, 500.0, 0.0), Quat::IDENTITY);
+	bus.place(SECOND, Vec3::new(0.0, 500.0, -300.0), Quat::IDENTITY);
+	bus.machine(SECOND)
+		.plane_mut(PlaneId::Player(SECOND))
+		.expect("the target")
+		.protect(0.0);
+	let empty_the_racks = |_: u32, _: &Match| Controls {
+		launch: true,
+		flare: true,
+		throttle: 0.5,
+		..toward(Vec3::NEG_Z)
+	};
+	bus.run(4.0, |number, game| {
+		if number == FIRST {
+			empty_the_racks(number, game)
+		} else {
+			toward(Vec3::NEG_Z)
+		}
+	});
+	let me = PlaneId::Player(FIRST);
+	assert_eq!(
+		bus.machine(FIRST).missiles_ready(me),
+		Some(0),
+		"the missiles are not gone"
+	);
+	assert_eq!(bus.machine(FIRST).flares_ready(me), Some(0), "the flares are not gone");
+
+	let (place, _) = place_of(bus.machine(FIRST), PowerUpKind::Weapons);
+	fly_into(&mut bus, FIRST, place);
+	assert_eq!(bus.machine(FIRST).missiles_ready(me), Some(tuning::MISSILES));
+	assert_eq!(bus.machine(FIRST).flares_ready(me), Some(tuning::FLARES));
 }
