@@ -17,7 +17,7 @@ use bevy::{
 };
 use serde::Deserialize;
 use sim::{
-	Event, Part, Session, arena, tuning,
+	Part, Session, arena, tuning,
 	wire::{PlaneId, PlaneState},
 };
 
@@ -54,8 +54,6 @@ const PILLAR_RADIUS: f32 = 2.2;
 const PILLAR_HEIGHT: f32 = 420.0;
 /// How far the icon of a power-up swells and shrinks, as a part of its size.
 const POWER_UP_SWELL: f32 = 0.14;
-/// How long a burst shows, in seconds.
-const BURST_SECONDS: f32 = 0.45;
 
 /// The meshes and the materials that the planes and the shots share.
 #[derive(Resource)]
@@ -74,9 +72,6 @@ struct Models {
 	power_glow: [Handle<StandardMaterial>; 3],
 	pillar: Handle<Mesh>,
 	pillar_glow: [Handle<StandardMaterial>; 3],
-	ball: Handle<Mesh>,
-	fire: Handle<StandardMaterial>,
-	flare_glow: Handle<StandardMaterial>,
 }
 
 /// One entry of the list of plane models that the build writes beside the page.
@@ -141,19 +136,9 @@ struct Tracer;
 #[derive(Component)]
 struct MissileView;
 
-#[derive(Component)]
-struct FlareView;
-
 /// The icon of the power-up at this place of the list of the rules.
 #[derive(Component)]
 struct PowerUpView(usize);
-
-/// A ball of fire, with its age in seconds and its largest radius in metres.
-#[derive(Component)]
-struct Burst {
-	age: f32,
-	size: f32,
-}
 
 pub fn plugin(app: &mut App) {
 	app.init_resource::<PlaneModels>()
@@ -161,15 +146,7 @@ pub fn plugin(app: &mut App) {
 		.add_systems(Update, load_plane_models.before(Drawn))
 		.add_systems(
 			Update,
-			(
-				show_planes,
-				show_tracers,
-				show_missiles,
-				show_flares,
-				show_power_ups,
-				show_bursts,
-				follow,
-			)
+			(show_planes, show_tracers, show_missiles, show_power_ups, follow)
 				.chain()
 				.after(Flow)
 				.in_set(Drawn),
@@ -223,9 +200,6 @@ fn make_models(
 				..default()
 			})
 		}),
-		ball: meshes.add(Sphere::new(1.0)),
-		fire: materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(14.0, 6.0, 1.5))),
-		flare_glow: materials.add(glow(Color::srgb(1.0, 0.95, 0.8), LinearRgba::rgb(30.0, 26.0, 18.0))),
 	});
 }
 
@@ -647,80 +621,6 @@ fn show_power_ups(
 				icon.spawn((Mesh3d(sign), MeshMaterial3d(glow)));
 				icon.spawn(pillar);
 			});
-	}
-}
-
-/// Show each flare as a bright ball.
-fn show_flares(
-	mut commands: Commands,
-	game: Res<Game>,
-	models: Res<Models>,
-	mut flares: Query<(&mut Transform, &mut Visibility), With<FlareView>>,
-) {
-	let burning = game
-		.session
-		.as_ref()
-		.and_then(Session::game)
-		.map(sim::Match::flares)
-		.unwrap_or_default();
-	let mut pool = flares.iter_mut();
-	for flare in burning {
-		let place = Transform::from_translation(flare.position).with_scale(Vec3::splat(0.9));
-		match pool.next() {
-			Some((mut transform, mut visibility)) => (*transform, *visibility) = (place, Visibility::Inherited),
-			None => {
-				commands.spawn((
-					FlareView,
-					Mesh3d(models.ball.clone()),
-					MeshMaterial3d(models.flare_glow.clone()),
-					place,
-				));
-			}
-		}
-	}
-	for (_, mut visibility) in pool {
-		*visibility = Visibility::Hidden;
-	}
-}
-
-/// Show a ball of fire for each burst of a missile and for each end of a plane.
-fn show_bursts(
-	mut commands: Commands,
-	game: Res<Game>,
-	models: Res<Models>,
-	time: Res<Time>,
-	planes: Query<(&PlaneView, &Transform), Without<Burst>>,
-	mut bursts: Query<(Entity, &mut Burst, &mut Transform)>,
-) {
-	for event in &game.events {
-		let (place, size) = match event {
-			Event::Burst { position } => (Some(*position), tuning::BURST_RADIUS),
-			Event::Kill { victim, .. } => (
-				planes
-					.iter()
-					.find(|(view, _)| view.0 == *victim)
-					.map(|(_, transform)| transform.translation),
-				22.0,
-			),
-			_ => (None, 0.0),
-		};
-		if let Some(place) = place {
-			let transform = Transform::from_translation(place).with_scale(Vec3::splat(1.0));
-			commands.spawn((
-				Burst { age: 0.0, size },
-				Mesh3d(models.ball.clone()),
-				MeshMaterial3d(models.fire.clone()),
-				transform,
-			));
-		}
-	}
-	for (entity, mut burst, mut transform) in &mut bursts {
-		burst.age += time.delta_secs();
-		if burst.age > BURST_SECONDS {
-			commands.entity(entity).despawn();
-		} else {
-			transform.scale = Vec3::splat(burst.size * (0.3 + 0.7 * burst.age / BURST_SECONDS));
-		}
 	}
 }
 

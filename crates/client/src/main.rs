@@ -12,6 +12,7 @@
 use bevy::prelude::*;
 
 mod audio;
+mod effects;
 mod flow;
 mod hud;
 mod input;
@@ -53,6 +54,7 @@ fn main() {
 			propeller::plugin,
 			sky::plugin,
 			puff::plugin,
+			effects::plugin,
 			hud::plugin,
 			audio::plugin,
 		))
