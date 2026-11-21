@@ -14,11 +14,9 @@ use percent_encoding::percent_decode_str;
 /// response asks the browser to check for a new version on each load, so that a new build of
 /// the game loads after a reload.
 pub async fn serve(root: &Path, path: &str) -> Response<Full<Bytes>> {
-	let Some(file) = resolve(root, path).await else {
-		return status(StatusCode::NOT_FOUND);
-	};
-	let Ok(file) = file else {
-		return status(StatusCode::FORBIDDEN);
+	let file = match resolve(root, path).await {
+		Ok(file) => file,
+		Err(refusal) => return status(refusal),
 	};
 	match tokio::fs::read(&file).await {
 		Ok(content) => Response::builder()
@@ -39,26 +37,33 @@ fn status(code: StatusCode) -> Response<Full<Bytes>> {
 		.expect("the headers are valid")
 }
 
-/// Find the file of a request path. `None` means that no file exists, and `Err` that the path
-/// leaves `root`.
-async fn resolve(root: &Path, path: &str) -> Option<Result<PathBuf, ()>> {
-	let decoded = percent_decode_str(path).decode_utf8().ok()?;
+/// Find the file of a request path, or the status that refuses it: 404 for a file that does not
+/// exist, and 403 for a path that leaves `root`.
+async fn resolve(root: &Path, path: &str) -> Result<PathBuf, StatusCode> {
+	let decoded = percent_decode_str(path)
+		.decode_utf8()
+		.map_err(|_| StatusCode::NOT_FOUND)?;
 	let mut file = root.to_path_buf();
 	for segment in decoded
 		.split('/')
 		.filter(|segment| !segment.is_empty() && *segment != ".")
 	{
 		if segment == ".." || segment.contains(['\\', '\0']) {
-			return Some(Err(()));
+			return Err(StatusCode::FORBIDDEN);
 		}
 		file.push(segment);
 	}
-	if tokio::fs::metadata(&file).await.ok()?.is_dir() {
+	let not_found = |_| StatusCode::NOT_FOUND;
+	if tokio::fs::metadata(&file).await.map_err(not_found)?.is_dir() {
 		file.push("index.html");
 	}
-	let file = tokio::fs::canonicalize(&file).await.ok()?;
-	let root = tokio::fs::canonicalize(root).await.ok()?;
-	Some(if file.starts_with(root) { Ok(file) } else { Err(()) })
+	let file = tokio::fs::canonicalize(&file).await.map_err(not_found)?;
+	let root = tokio::fs::canonicalize(root).await.map_err(not_found)?;
+	if file.starts_with(root) {
+		Ok(file)
+	} else {
+		Err(StatusCode::FORBIDDEN)
+	}
 }
 
 fn content_type(file: &Path) -> &'static str {
