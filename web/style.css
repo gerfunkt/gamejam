@@ -472,6 +472,11 @@ th:not(:first-child) {
 	font-size: 0.85rem;
 }
 
+#alert.calm {
+	color: var(--good);
+	font-size: 1.05rem;
+}
+
 #gauges {
 	position: absolute;
 	left: max(0.75rem, env(safe-area-inset-left));

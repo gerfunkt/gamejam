@@ -50,8 +50,10 @@ const POWER_COLOURS: [Color; 3] = [
 	Color::srgb(0.7, 1.0, 0.75),
 ];
 /// The radius and the height of the pillar of light through a power-up, in metres.
-const PILLAR_RADIUS: f32 = 2.2;
+const PILLAR_RADIUS: f32 = 1.4;
 const PILLAR_HEIGHT: f32 = 420.0;
+/// How much light the pillar of a power-up adds to the picture, from 0 to 1. A pilot near it must still see past it.
+const PILLAR_GLOW: f32 = 0.22;
 /// How far the icon of a power-up swells and shrinks, as a part of its size.
 const POWER_UP_SWELL: f32 = 0.14;
 
@@ -193,7 +195,7 @@ fn make_models(
 		pillar: meshes.add(Cylinder::new(PILLAR_RADIUS, PILLAR_HEIGHT)),
 		pillar_glow: POWER_COLOURS.map(|colour| {
 			materials.add(StandardMaterial {
-				base_color: colour.with_alpha(0.45),
+				base_color: colour.with_alpha(PILLAR_GLOW),
 				alpha_mode: AlphaMode::Add,
 				unlit: true,
 				cull_mode: None,

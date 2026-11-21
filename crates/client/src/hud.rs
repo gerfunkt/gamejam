@@ -797,6 +797,8 @@ fn show_display(
 		String::new()
 	};
 	page::set_text("alert", &alert);
+	// The protection after a spawn is good news, so it does not show in the colour of a danger.
+	page::set_class("alert", "calm", alert.starts_with("Protected"));
 
 	// The kills, in the order in which every machine sees them, and the scores.
 	memory.feed.iter_mut().for_each(|(_, left)| *left -= dt);
