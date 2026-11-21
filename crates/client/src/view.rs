@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::{asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology};
 use sim::{
-	Event, Part, Session, level_frame, tuning,
+	Event, Part, Session, arena, level_frame, tuning,
 	wire::{PlaneId, PlaneState},
 };
 
@@ -40,6 +40,7 @@ struct Models {
 	missile_paint: Handle<StandardMaterial>,
 	ball: Handle<Mesh>,
 	fire: Handle<StandardMaterial>,
+	flare_glow: Handle<StandardMaterial>,
 }
 
 /// The root of the picture of one plane.
@@ -55,6 +56,9 @@ struct Tracer;
 
 #[derive(Component)]
 struct MissileView;
+
+#[derive(Component)]
+struct FlareView;
 
 /// A ball of fire, with its age in seconds and its largest radius in metres.
 #[derive(Component)]
@@ -73,7 +77,14 @@ pub fn plugin(app: &mut App) {
 		.add_systems(Startup, (make_models, make_arena, make_camera))
 		.add_systems(
 			Update,
-			(show_planes, show_tracers, show_missiles, show_bursts, follow)
+			(
+				show_planes,
+				show_tracers,
+				show_missiles,
+				show_flares,
+				show_bursts,
+				follow,
+			)
 				.chain()
 				.after(Flow)
 				.in_set(Drawn),
@@ -105,22 +116,17 @@ fn make_models(
 		missile_paint: materials.add(glow(Color::srgb(1.0, 1.0, 1.0), LinearRgba::rgb(6.0, 6.0, 6.0))),
 		ball: meshes.add(Sphere::new(1.0)),
 		fire: materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(14.0, 6.0, 1.5))),
+		flare_glow: materials.add(glow(Color::srgb(1.0, 0.95, 0.8), LinearRgba::rgb(30.0, 26.0, 18.0))),
 	});
 }
 
-/// Return a number from 0 to 1 that depends only on `seed`, so every machine builds the same arena.
-fn noise(seed: u32) -> f32 {
-	let mut value = seed.wrapping_mul(0x9E37_79B9) ^ 0x85EB_CA6B;
-	value ^= value >> 15;
-	value = value.wrapping_mul(0x2C1B_3C6D);
-	value ^= value >> 12;
-	(value & 0xFFFF) as f32 / 65535.0
-}
-
-/// Return a ground of squares in two tones, which shows speed and height. Outside the arena it is brown.
+/// Return the ground of the rules as squares in two tones, which show speed and height.
+///
+/// Each square is flat, with the heights of the rules at its corners. Outside the arena it is brown.
 fn ground() -> Mesh {
 	let (mut positions, mut normals, mut colours, mut indices) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
 	let count = (2.0 * GROUND_EXTENT / TILE) as i32;
+	let corner = |x: f32, z: f32| Vec3::new(x, arena::ground_height(x, z), z);
 	for row in 0..count {
 		for column in 0..count {
 			let (x, z) = (column as f32 * TILE - GROUND_EXTENT, row as f32 * TILE - GROUND_EXTENT);
@@ -131,14 +137,16 @@ fn ground() -> Mesh {
 				(false, true) => Color::srgb(0.42, 0.37, 0.27),
 				(false, false) => Color::srgb(0.34, 0.30, 0.22),
 			};
+			let corners = [
+				corner(x, z),
+				corner(x, z + TILE),
+				corner(x + TILE, z + TILE),
+				corner(x + TILE, z),
+			];
+			let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]).normalize();
 			let first = positions.len() as u32;
-			positions.extend([
-				[x, 0.0, z],
-				[x, 0.0, z + TILE],
-				[x + TILE, 0.0, z + TILE],
-				[x + TILE, 0.0, z],
-			]);
-			normals.extend([[0.0, 1.0, 0.0]; 4]);
+			positions.extend(corners.map(|corner| corner.to_array()));
+			normals.extend([normal.to_array(); 4]);
 			colours.extend([colour.to_linear().to_f32_array(); 4]);
 			indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
 		}
@@ -171,7 +179,7 @@ fn make_arena(
 		Transform::from_xyz(400.0, 900.0, 300.0).looking_at(Vec3::ZERO, Vec3::Y),
 	));
 
-	// Blocks on the ground are decoration. They show speed and height, and nothing can hit them.
+	// The blocks of the rules. A plane that touches one is destroyed, so the picture shows them exactly.
 	let block = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
 	let stones = [
 		Color::srgb(0.62, 0.60, 0.56),
@@ -179,36 +187,26 @@ fn make_arena(
 		Color::srgb(0.78, 0.74, 0.62),
 	];
 	let stones = stones.map(|colour| materials.add(colour));
-	for index in 0..160u32 {
-		let angle = noise(index * 7) * std::f32::consts::TAU;
-		let distance = noise(index * 7 + 1).sqrt() * (tuning::ARENA_RADIUS - 60.0);
-		let size = Vec3::new(
-			14.0 + noise(index * 7 + 2) * 30.0,
-			10.0 + noise(index * 7 + 3).powi(2) * 80.0,
-			14.0 + noise(index * 7 + 4) * 30.0,
-		);
+	for (index, feature) in arena::features().iter().enumerate() {
 		commands.spawn((
 			Mesh3d(block.clone()),
-			MeshMaterial3d(stones[index as usize % stones.len()].clone()),
-			Transform::from_xyz(angle.cos() * distance, size.y / 2.0, angle.sin() * distance)
-				.with_scale(size)
-				.with_rotation(Quat::from_rotation_y(angle * 3.0)),
+			MeshMaterial3d(stones[index % stones.len()].clone()),
+			Transform::from_translation(feature.centre)
+				.with_scale(feature.half_extents * 2.0)
+				.with_rotation(Quat::from_rotation_y(feature.turn)),
 		));
 	}
 
 	// Red and white posts mark the edge of the arena, where a plane turns back by itself.
-	let post = meshes.add(Cuboid::new(8.0, 120.0, 8.0));
+	let post = meshes.add(Cuboid::new(8.0, 160.0, 8.0));
 	let paints = [Color::srgb(0.85, 0.15, 0.12), Color::srgb(0.95, 0.95, 0.95)].map(|colour| materials.add(colour));
 	for index in 0..96 {
 		let angle = index as f32 / 96.0 * std::f32::consts::TAU;
+		let (x, z) = (angle.cos() * tuning::ARENA_RADIUS, angle.sin() * tuning::ARENA_RADIUS);
 		commands.spawn((
 			Mesh3d(post.clone()),
 			MeshMaterial3d(paints[index % 2].clone()),
-			Transform::from_xyz(
-				angle.cos() * tuning::ARENA_RADIUS,
-				60.0,
-				angle.sin() * tuning::ARENA_RADIUS,
-			),
+			Transform::from_xyz(x, arena::ground_height(x, z) + 80.0, z),
 		));
 	}
 }
@@ -382,6 +380,39 @@ fn show_missiles(
 					MissileView,
 					Mesh3d(models.missile.clone()),
 					MeshMaterial3d(models.missile_paint.clone()),
+					place,
+				));
+			}
+		}
+	}
+	for (_, mut visibility) in pool {
+		*visibility = Visibility::Hidden;
+	}
+}
+
+/// Show each flare as a bright ball.
+fn show_flares(
+	mut commands: Commands,
+	game: Res<Game>,
+	models: Res<Models>,
+	mut flares: Query<(&mut Transform, &mut Visibility), With<FlareView>>,
+) {
+	let burning = game
+		.session
+		.as_ref()
+		.and_then(Session::game)
+		.map(sim::Match::flares)
+		.unwrap_or_default();
+	let mut pool = flares.iter_mut();
+	for flare in burning {
+		let place = Transform::from_translation(flare.position).with_scale(Vec3::splat(2.5));
+		match pool.next() {
+			Some((mut transform, mut visibility)) => (*transform, *visibility) = (place, Visibility::Inherited),
+			None => {
+				commands.spawn((
+					FlareView,
+					Mesh3d(models.ball.clone()),
+					MeshMaterial3d(models.flare_glow.clone()),
 					place,
 				));
 			}

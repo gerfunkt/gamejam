@@ -21,13 +21,14 @@ const WHEEL_THROTTLE: f32 = 0.1;
 const KEY_THROTTLE: f32 = 0.7;
 const STORAGE_KEY: &str = "dogfight-options";
 /// The version of the stored options. Options of another version give way to the defaults.
-const OPTIONS_VERSION: u32 = 1;
+const OPTIONS_VERSION: u32 = 2;
 
 /// An action of the game that a key does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bind {
 	Fire,
 	Launch,
+	Flare,
 	Boost,
 	ThrottleUp,
 	ThrottleDown,
@@ -39,9 +40,10 @@ pub enum Bind {
 }
 
 impl Bind {
-	pub const ALL: [Bind; 10] = [
+	pub const ALL: [Bind; 11] = [
 		Bind::Fire,
 		Bind::Launch,
+		Bind::Flare,
 		Bind::Boost,
 		Bind::ThrottleUp,
 		Bind::ThrottleDown,
@@ -57,6 +59,7 @@ impl Bind {
 		match self {
 			Bind::Fire => "Fire the Gun",
 			Bind::Launch => "Launch a Missile",
+			Bind::Flare => "Release a Flare",
 			Bind::Boost => "Boost",
 			Bind::ThrottleUp => "More Throttle",
 			Bind::ThrottleDown => "Less Throttle",
@@ -74,6 +77,7 @@ impl Bind {
 		match self {
 			Bind::Fire => "Space",
 			Bind::Launch => "KeyF",
+			Bind::Flare => "KeyE",
 			Bind::Boost => "ShiftLeft",
 			Bind::ThrottleUp => "KeyW",
 			Bind::ThrottleDown => "KeyS",
@@ -337,6 +341,7 @@ pub fn read(options: &Options, orientation: Quat, lens: Lens, throttle: &mut f32
 			boost: held(Bind::Boost),
 			fire: state.left || held(Bind::Fire),
 			launch: state.right || held(Bind::Launch),
+			flare: held(Bind::Flare),
 		}
 	})
 }

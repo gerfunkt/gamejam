@@ -407,10 +407,12 @@ fn show_display(
 		page::set_class(&id, "gone", health <= 0.0);
 	}
 	page::set_text("speed", &format!("{:.0} m/s", own.speed));
-	page::set_text("height", &format!("{:.0} m", own.position.y));
+	let above_ground = own.position.y - sim::arena::ground_height(own.position.x, own.position.z);
+	page::set_text("height", &format!("{above_ground:.0} m"));
 	page::set_text("throttle", &format!("{:.0} %", game.throttle * 100.0));
 	page::set_text("boost", &format!("{:.0} %", own.boost() * 100.0));
 	page::set_text("missiles", &running.missiles_ready(me).unwrap_or(0).to_string());
+	page::set_text("flares", &running.flares_ready(me).unwrap_or(0).to_string());
 
 	// The gun sight, which shows each hit of the player for a moment.
 	*hit = (*hit - time.delta_secs()).max(0.0);
