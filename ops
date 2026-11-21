@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795283257,"nonce":"3cuuKhT4XLeBQ5Rv1Aca0h9xT4I=","message":"Decided by the owner on 2026-11-21: WebGPU only. WebGL2 is not supported; the demo runs on Chromium. requirements.md and feasibility.md updated.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795283257,"nonce":"wQpRRPQMA3W+Im9zAZUhHBtK8ho=","status":2}]}
