@@ -459,7 +459,7 @@ impl Match {
 			}
 			let local = &mut self.locals[index];
 			let controls = match local.bot {
-				Some(skill) => bot_controls(local.id, &local.state(), seen, &self.missiles, skill),
+				Some(skill) => bot_controls(local.id, &local.state(), seen, &self.missiles, &self.power_ups, skill),
 				None => *input,
 			};
 			local.controls = controls;

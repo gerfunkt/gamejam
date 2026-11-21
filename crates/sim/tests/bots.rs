@@ -5,7 +5,7 @@ mod common;
 use common::{Bus, toward};
 use glam::{Quat, Vec2, Vec3};
 use sim::{
-	Controls, Plane, Skill, aim_direction, arena, bot_controls, tuning,
+	Controls, Match, Plane, PowerUp, Skill, aim_direction, arena, bot_controls, tuning,
 	wire::{Message, PlaneId, PlaneState, Settings},
 };
 
@@ -31,7 +31,7 @@ fn state(position: Vec3) -> PlaneState {
 /// The controls of a bot at 500 m that flies north and sees one other plane at `position`.
 fn bot_that_sees(other: PlaneState, skill: Skill) -> Controls {
 	let me = state(Vec3::new(0.0, 500.0, 0.0));
-	bot_controls(ME, &me, &[(ME, me), (OTHER, other)], &[], skill)
+	bot_controls(ME, &me, &[(ME, me), (OTHER, other)], &[], &[], skill)
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn a_bot_climbs_away_from_the_terrain_before_it_fights() {
 	let floor = arena::clear_height(0.0, 0.0);
 	let low = state(Vec3::new(0.0, floor + 20.0, 0.0));
 	let below = state(Vec3::new(0.0, floor - 40.0, -250.0));
-	let controls = bot_controls(ME, &low, &[(ME, low), (OTHER, below)], &[], Skill::Ace);
+	let controls = bot_controls(ME, &low, &[(ME, low), (OTHER, below)], &[], &[], Skill::Ace);
 	assert!(controls.aim.y > 0.3, "the aim {} does not climb", controls.aim);
 }
 
@@ -257,4 +257,138 @@ fn a_bot_releases_a_flare_at_a_missile_that_comes_near_and_a_rookie_does_not() {
 		assert!(flares >= 1, "{skill:?} released no flare");
 		assert!(flares <= 2, "{skill:?} wasted {flares} flares on two missiles at most");
 	}
+}
+
+const NO_BOTS: Settings = Settings {
+	bots: 0,
+	skill: Skill::Rookie,
+};
+
+/// The power-ups of a new match, in which the one at `gone` was taken, if any.
+fn power_ups(gone: Option<u8>) -> Vec<PowerUp> {
+	let mut game = Match::new(1, 7, NO_BOTS);
+	if let Some(place) = gone {
+		let claim = Message::Claim {
+			place,
+			plane: PlaneId::Player(1),
+		};
+		game.receive(0.0, 1, &claim);
+	}
+	game.power_ups().to_vec()
+}
+
+/// The bot at `position` with its nose to the north. The other planes are `others`.
+fn bot_at(position: Vec3, others: &[(PlaneId, PlaneState)], power_ups: &[PowerUp]) -> Controls {
+	let me = state(position);
+	let planes: Vec<_> = std::iter::once((ME, me)).chain(others.iter().copied()).collect();
+	bot_controls(ME, &me, &planes, &[], power_ups, Skill::Pilot)
+}
+
+/// How far the aim of `controls` lies off the direction from `from` to `to`, in radians.
+fn off(controls: &Controls, from: Vec3, to: Vec3) -> f32 {
+	controls.aim.angle_between(to - from)
+}
+
+/// The place of the power-up that is nearest to `from`.
+fn nearest_place(power_ups: &[PowerUp], from: Vec3) -> Vec3 {
+	power_ups
+		.iter()
+		.map(|power_up| power_up.position)
+		.min_by(|a, b| a.distance(from).total_cmp(&b.distance(from)))
+		.expect("the arena holds power-ups")
+}
+
+#[test]
+fn a_bot_without_a_target_flies_toward_a_near_power_up() {
+	let power_ups = power_ups(None);
+	let from = Vec3::new(0.0, 500.0, 0.0);
+	let spot = nearest_place(&power_ups, from);
+	let toward_it = bot_at(from, &[], &power_ups);
+	assert!(
+		off(&toward_it, from, spot) < off(&bot_at(from, &[], &[]), from, spot) - 0.1,
+		"the aim {} does not turn toward the power-up",
+		toward_it.aim
+	);
+}
+
+#[test]
+fn a_bot_leaves_a_power_up_that_is_gone_or_far_away() {
+	let from = Vec3::new(0.0, 500.0, 0.0);
+	let without = bot_at(from, &[], &[]);
+	let gone: Vec<_> = (0..8).flat_map(|place| power_ups(Some(place))).collect();
+	let gone: Vec<_> = gone.into_iter().filter(|power_up| !power_up.present).collect();
+	assert_eq!(
+		bot_at(from, &[], &gone),
+		without,
+		"a bot flew for a power-up that is gone"
+	);
+
+	let far = Vec3::new(1900.0, 500.0, 0.0);
+	let power_ups = power_ups(None);
+	assert_eq!(
+		bot_at(far, &[], &power_ups),
+		bot_at(far, &[], &[]),
+		"a bot flew for a power-up beyond {} m",
+		tuning::BOT_POWERUP_RANGE
+	);
+}
+
+#[test]
+fn a_bot_with_a_near_target_fights_and_does_not_fly_for_a_power_up() {
+	let from = Vec3::new(0.0, 500.0, 0.0);
+	let target = state(Vec3::new(0.0, 500.0, -250.0));
+	let others = [(OTHER, target)];
+	let controls = bot_at(from, &others, &power_ups(None));
+	assert_eq!(
+		controls,
+		bot_at(from, &others, &[]),
+		"a near target comes before a power-up"
+	);
+	assert!(controls.fire);
+}
+
+#[test]
+fn a_bot_with_a_far_target_flies_for_a_near_power_up() {
+	let power_ups = power_ups(None);
+	let from = Vec3::new(0.0, 500.0, 0.0);
+	let far = state(Vec3::new(0.0, 500.0, -(tuning::BOT_POWERUP_TARGET_DISTANCE + 100.0)));
+	let others = [(OTHER, far)];
+	let spot = nearest_place(&power_ups, from);
+	let controls = bot_at(from, &others, &power_ups);
+	assert!(
+		off(&controls, from, spot) < off(&bot_at(from, &others, &[]), from, spot) - 0.1,
+		"the aim {} does not turn toward the power-up",
+		controls.aim
+	);
+	assert!(!controls.fire && !controls.launch);
+}
+
+#[test]
+fn a_bot_that_flies_for_a_power_up_takes_it() {
+	let mut bus = Bus::new(
+		&[1],
+		Settings {
+			bots: 1,
+			skill: Skill::Pilot,
+		},
+	);
+	bus.machine(1)
+		.plane_mut(PlaneId::Player(1))
+		.expect("the player")
+		.protect(f32::MAX);
+	let spot = nearest_place(bus.machine(1).power_ups(), Vec3::new(0.0, 500.0, 0.0));
+	*bus.machine(1).plane_mut(PlaneId::Bot(0)).expect("the bot") =
+		Plane::new(Vec3::new(0.0, 500.0, 0.0), Quat::IDENTITY);
+	bus.place(1, Vec3::new(1900.0, 3000.0, 0.0), Quat::IDENTITY);
+	bus.run(40.0, |_, _| toward(Vec3::Y));
+	let took = bus.log.iter().any(|(_, message)| {
+		matches!(
+			message,
+			Message::Claim {
+				plane: PlaneId::Bot(0),
+				..
+			}
+		)
+	});
+	assert!(took, "the bot took no power-up in 40 s near {spot}");
 }

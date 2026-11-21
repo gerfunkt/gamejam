@@ -203,6 +203,10 @@ pub const POWERUP_SPEED_BONUS: f32 = 30.0;
 
 // Bots.
 
+/// The farthest power-up that a bot flies for, in metres.
+pub const BOT_POWERUP_RANGE: f32 = 700.0;
+/// A bot with a target farther than this flies for a near power-up instead, in metres.
+pub const BOT_POWERUP_TARGET_DISTANCE: f32 = 600.0;
 /// How far ahead on its ring a bot without a target aims, in radians.
 pub const BOT_IDLE_LEAD: f32 = 0.5;
 /// The radius of the ring on which a bot without a target circles, in metres.

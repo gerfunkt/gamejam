@@ -5,6 +5,7 @@ use crate::{
 	arena,
 	missile::Missile,
 	plane::Controls,
+	powerup::PowerUp,
 	tuning,
 	wire::{PlaneId, PlaneState},
 };
@@ -126,12 +127,16 @@ impl Skill {
 /// near plane ahead of its nose. It aims ahead of its target, fires when its aim is good, and launches a missile when its lock
 /// closed, and it releases a flare when a missile comes near. Without a target, it circles the
 /// centre. The terrain comes before the fight.
+///
+/// A bot without a target, or with a target farther than [`tuning::BOT_POWERUP_TARGET_DISTANCE`],
+/// flies for the nearest of `power_ups` that is there and within [`tuning::BOT_POWERUP_RANGE`].
 #[must_use]
 pub fn bot_controls(
 	me: PlaneId,
 	state: &PlaneState,
 	planes: &[(PlaneId, PlaneState)],
 	missiles: &[Missile],
+	power_ups: &[PowerUp],
 	skill: Skill,
 ) -> Controls {
 	let profile = skill.profile();
@@ -148,6 +153,17 @@ pub fn bot_controls(
 		.map(|(_, other)| other)
 		.min_by(|a, b| rank(a).total_cmp(&rank(b)));
 
+	let pickup = power_ups
+		.iter()
+		.filter(|power_up| power_up.present)
+		.map(|power_up| power_up.position)
+		.filter(|&place| place.distance(state.position) <= tuning::BOT_POWERUP_RANGE)
+		.min_by(|a, b| a.distance(state.position).total_cmp(&b.distance(state.position)))
+		.filter(|_| {
+			target.is_none_or(|target| target.position.distance(state.position) > tuning::BOT_POWERUP_TARGET_DISTANCE)
+		});
+	let target = target.filter(|_| pickup.is_none());
+
 	let mut controls = Controls {
 		aim: forward,
 		throttle: profile.throttle,
@@ -156,14 +172,15 @@ pub fn bot_controls(
 		launch: false,
 		flare: false,
 	};
-	let goal = match target {
+	let goal = match (target, pickup) {
 		// The place where a bullet meets the target.
-		Some(target) => {
+		(Some(target), _) => {
 			let flight = target.position.distance(state.position) / tuning::BULLET_SPEED;
 			target.position + target.velocity() * flight * profile.lead
 		}
+		(None, Some(place)) => place,
 		// A place a little ahead on a ring around the centre.
-		None => {
+		(None, None) => {
 			let angle = state.position.z.atan2(state.position.x) + tuning::BOT_IDLE_LEAD;
 			Vec3::new(angle.cos(), 0.0, angle.sin()) * tuning::BOT_IDLE_RADIUS + Vec3::Y * tuning::BOT_IDLE_HEIGHT
 		}
