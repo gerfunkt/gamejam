@@ -17,8 +17,8 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use sim::room::{
-	CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, OPEN_ROOM_TITLE, RoomEntry,
-	RoomStatus, clean_info, clean_title, frame,
+	CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_TITLE, RoomEntry, RoomStatus,
+	clean_info, clean_title, frame,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
@@ -349,7 +349,7 @@ mod tests {
 	use std::time::Duration;
 
 	use futures_util::{SinkExt, StreamExt};
-	use sim::room::{Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, RoomStatus, split_frame};
+	use sim::room::{Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, RoomStatus, split_frame};
 	use tokio::io::DuplexStream;
 	use tokio::time::timeout;
 	use tokio_tungstenite::WebSocketStream;
@@ -395,7 +395,7 @@ mod tests {
 		let bus = Bus::new();
 		let mut first = Client::join(&bus, Join::Open).await;
 		let status = first.status().await;
-		assert_eq!(status.id, "0", "the open room has the id 0");
+		assert_eq!(status.id, OPEN_ROOM_ID, "the open room has its own id");
 		assert_eq!(status.title, "Open room");
 		assert_eq!(
 			(status.owner, status.members, status.you),
@@ -598,7 +598,7 @@ mod tests {
 			assert_eq!(order, &seen[0], "every member must see the same order");
 		}
 		for sender in senders {
-			sender.await.expect("the sender task must finish");
+			let _sink = sender.await.expect("the sender task must finish");
 		}
 	}
 
@@ -761,7 +761,7 @@ mod tests {
 				received += 1;
 			}
 		}
-		sender.await.expect("the sender task must finish");
+		let _sink = sender.await.expect("the sender task must finish");
 		assert_eq!(bus.rooms()[0].members, 1, "the member that fell behind was removed");
 		assert_eq!(slow.close_code().await, 1008, "it learns why, when it reads again");
 	}
