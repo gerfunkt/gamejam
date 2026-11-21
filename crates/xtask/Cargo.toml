@@ -18,3 +18,5 @@ glam.workspace = true
 # The plane of the rules gives the size and the parts that a model must fit.
 sim = { path = "../sim" }
 serde.workspace = true
+# Reads the manifest of the plane models. Pure Rust, and already in the lock file.
+toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }

@@ -7481,6 +7481,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sim",
+ "toml",
 ]
 
 [[package]]

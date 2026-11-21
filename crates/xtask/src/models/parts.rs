@@ -1,6 +1,5 @@
 //! Cut a plane model into the five parts that damage breaks.
 
-use glam::Vec3;
 use sim::Part;
 
 use super::geometry::{Axis, Plane, Triangle, clip};
@@ -30,22 +29,6 @@ impl Regions {
 			right_wing_x: fuselage.0.x + fuselage.1.x,
 			engine_z: engine.0.z + engine.1.z,
 			tail_z: tail.0.z - tail.1.z,
-		}
-	}
-
-	/// Return the part that owns `point`.
-	#[must_use]
-	pub fn part_at(&self, point: Vec3) -> Part {
-		if point.z < self.engine_z {
-			Part::Engine
-		} else if point.z >= self.tail_z {
-			Part::Tail
-		} else if point.x < self.left_wing_x {
-			Part::LeftWing
-		} else if point.x >= self.right_wing_x {
-			Part::RightWing
-		} else {
-			Part::Fuselage
 		}
 	}
 
@@ -85,8 +68,27 @@ fn cut_all(triangles: &[Triangle], plane: Plane) -> (Vec<Triangle>, Vec<Triangle
 
 #[cfg(test)]
 mod tests {
+	use glam::Vec3;
+
 	use super::*;
 	use crate::models::geometry::{area, tests::vertex};
+
+	impl Regions {
+		/// Return the part that owns `point`, by the same rules as the cuts.
+		pub fn part_at(&self, point: Vec3) -> Part {
+			if point.z < self.engine_z {
+				Part::Engine
+			} else if point.z >= self.tail_z {
+				Part::Tail
+			} else if point.x < self.left_wing_x {
+				Part::LeftWing
+			} else if point.x >= self.right_wing_x {
+				Part::RightWing
+			} else {
+				Part::Fuselage
+			}
+		}
+	}
 
 	fn centroid(triangle: &Triangle) -> Vec3 {
 		triangle.iter().map(|vertex| vertex.position).sum::<Vec3>() / 3.0

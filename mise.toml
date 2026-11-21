@@ -19,6 +19,10 @@ run = "cargo xtask serve"
 description = "Build the WebGPU client for the browser, for the loop of change and test"
 run = "cargo xtask build"
 
+[tasks.models]
+description = "Turn the plane models of assets/planes/ into the GLB files of the client"
+run = "cargo xtask models"
+
 [tasks."build:release"]
 description = "Build both clients for the browser, for a playtest or the demo"
 run = "cargo xtask build --release"

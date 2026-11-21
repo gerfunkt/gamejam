@@ -250,22 +250,18 @@ impl Reader<'_> {
 }
 
 fn chunks<T, const N: usize>(data: &[u8], convert: fn([u8; N]) -> T) -> Vec<T> {
-	data.chunks_exact(N)
-		.map(|chunk| convert(chunk.try_into().expect("chunks_exact gives chunks of N bytes")))
-		.collect()
+	data.as_chunks::<N>().0.iter().map(|chunk| convert(*chunk)).collect()
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
 
+	/// Something that appends a child node to a file under construction.
+	pub(crate) type Writer<'a> = &'a dyn Fn(&mut Vec<u8>);
+
 	/// Encode a node record of version 7.4, the way an exporter does.
-	pub(crate) fn encode_node(
-		out: &mut Vec<u8>,
-		name: &str,
-		properties: &[Vec<u8>],
-		children: &[&dyn Fn(&mut Vec<u8>)],
-	) {
+	pub(crate) fn encode_node(out: &mut Vec<u8>, name: &str, properties: &[Vec<u8>], children: &[Writer]) {
 		let start = out.len();
 		out.extend_from_slice(&[0; 12]);
 		out.push(u8::try_from(name.len()).unwrap());

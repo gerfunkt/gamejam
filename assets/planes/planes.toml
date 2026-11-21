@@ -1,0 +1,20 @@
+# The plane models of the game. `cargo xtask models` turns each entry into web/assets/planes/<key>.glb.
+#
+# A pilot flies the entry with the most kills that does not exceed the kills of the pilot.
+# Paths are relative to this file. `nose` and `up` name the axes of the model after the axis
+# settings of its file apply. Write "not recorded" in a record field that nobody knows. Do not guess.
+
+[[plane]]
+key = "wwi-fighter"
+model = "wwi-fighter/model.fbx"
+texture = "wwi-fighter/texture.png"
+nose = "-X"
+up = "+Y"
+kills = 0
+
+[plane.record]
+author = "AresLiCa (commit 96a0bc7 on the branch graphic_assets)"
+service = "Meshy AI"
+date = "2026-11-21"
+prompt = "not recorded"
+licence = "not recorded"

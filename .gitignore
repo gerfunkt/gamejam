@@ -7,3 +7,5 @@
 # The builds of the client. `cargo xtask build` writes them.
 /web/webgpu/
 /web/webgl2/
+# The plane models that `cargo xtask models` writes.
+/web/assets/
