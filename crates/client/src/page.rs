@@ -258,6 +258,27 @@ pub fn canvas(id: &str) -> Option<web_sys::CanvasRenderingContext2d> {
 	canvas.get_context("2d").ok()??.dyn_into().ok()
 }
 
+/// Fetch the text of a file beside the page, and give it to `deliver`. A file that the server
+/// does not have gives `None`.
+pub fn fetch_text(path: &'static str, deliver: impl FnOnce(Option<String>) + 'static) {
+	wasm_bindgen_futures::spawn_local(async move {
+		let text = async {
+			let response = wasm_bindgen_futures::JsFuture::from(window().fetch_with_str(path))
+				.await
+				.ok()?;
+			let response: web_sys::Response = response.dyn_into().ok()?;
+			if !response.ok() {
+				return None;
+			}
+			wasm_bindgen_futures::JsFuture::from(response.text().ok()?)
+				.await
+				.ok()?
+				.as_string()
+		};
+		deliver(text.await);
+	});
+}
+
 /// Return the value of a parameter in the address of the page.
 pub fn query(name: &str) -> Option<String> {
 	let search = window().location().search().ok()?;

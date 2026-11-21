@@ -34,7 +34,8 @@ The plane turns toward the mouse cursor. The left button fires the gun, the righ
 |---|---|
 | `mise run test` | Runs the tests of the rules and of the server. They need no browser. |
 | `mise run check` | Checks the format and the lints of all crates. |
-| `cargo xtask build` | Builds the WebGPU client into `web/`. With `--all`, it also builds the WebGL2 client. |
+| `cargo xtask build` | Converts the plane models, and builds the WebGPU client into `web/`. With `--all`, it also builds the WebGL2 client. |
+| `cargo xtask models --preview` | Converts the plane models of `assets/planes/planes.toml` alone, and draws a picture of each one beside its files. |
 | `node play.ts solo https://localhost:5201/` | Plays a solo match in headless Chromium, in `tests/browser/` after `pnpm install`, while the server runs. |
 
 The parts of the repository:
@@ -45,6 +46,7 @@ The parts of the repository:
 | `crates/client` | The browser client. The Bevy engine draws the sky, and the page holds the menus. |
 | `crates/server` | The server of the LAN host: HTTPS, the game files, and the message bus with its rooms. |
 | `crates/xtask` | The build tasks. |
+| `assets/` | The source files of the plane models, with a manifest that records where each one comes from. |
 | `web/` | The page that loads the client. |
 | `tests/browser` | The tests that play the game in a browser. |
 

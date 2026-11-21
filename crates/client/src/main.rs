@@ -35,6 +35,11 @@ fn main() {
 					primary_window: Some(window),
 					..default()
 				})
+				// The server holds no extra file beside an asset, so the engine must not ask for one.
+				.set(AssetPlugin {
+					meta_check: bevy::asset::AssetMetaCheck::Never,
+					..default()
+				})
 				.disable::<bevy::app::PanicHandlerPlugin>(),
 		)
 		.add_plugins((flow::plugin, view::plugin, hud::plugin))

@@ -2,9 +2,19 @@
 //!
 //! The view reads the match and never changes it. Everything is a grey box.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+	cell::RefCell,
+	collections::{HashMap, HashSet},
+};
 
-use bevy::{asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology};
+use bevy::{
+	asset::RenderAssetUsages,
+	gltf::{Gltf, GltfMaterial, GltfMesh},
+	mesh::Indices,
+	prelude::*,
+	render::render_resource::PrimitiveTopology,
+};
+use serde::Deserialize;
 use sim::{
 	Event, Part, Session, arena, level_frame, tuning,
 	wire::{PlaneId, PlaneState},
@@ -13,6 +23,7 @@ use sim::{
 use crate::{
 	flow::{Flow, Game},
 	input::Lens,
+	page,
 };
 
 const SKY: Color = Color::srgb(0.55, 0.70, 0.86);
@@ -43,9 +54,44 @@ struct Models {
 	flare_glow: Handle<StandardMaterial>,
 }
 
-/// The root of the picture of one plane.
+/// One entry of the list of plane models that the build writes beside the page.
+#[derive(Deserialize)]
+struct ModelEntry {
+	/// The file of the model, in the directory of the plane models.
+	file: String,
+	/// The kills from which a pilot flies this model.
+	kills: u16,
+}
+
+/// A plane model of the build. The build cut it into one mesh for each part of the rules.
+struct PlaneModel {
+	kills: u16,
+	file: Handle<Gltf>,
+	/// The mesh of each part, and the texture, once the file is loaded.
+	parts: Option<([Handle<Mesh>; Part::ALL.len()], Option<Handle<Image>>)>,
+}
+
+/// The plane models, in the order of their kills. Without a model, a plane shows as boxes.
+#[derive(Resource, Default)]
+struct PlaneModels(Vec<PlaneModel>);
+
+impl PlaneModels {
+	/// Return the place in the list of the model that a pilot with these kills flies, if it is loaded.
+	fn for_kills(&self, kills: u16) -> Option<usize> {
+		self.0
+			.iter()
+			.rposition(|model| model.kills <= kills && model.parts.is_some())
+	}
+}
+
+thread_local! {
+	/// The text of the list of plane models, from its arrival until the view reads it.
+	static MODEL_LIST: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// The root of the picture of one plane, with the place of its model in the list of models.
 #[derive(Component)]
-struct PlaneView(PlaneId);
+struct PlaneView(PlaneId, Option<usize>);
 
 /// The box of one part of a plane.
 #[derive(Component)]
@@ -74,7 +120,9 @@ pub fn plugin(app: &mut App) {
 			brightness: 500.0,
 			..default()
 		})
+		.init_resource::<PlaneModels>()
 		.add_systems(Startup, (make_models, make_arena, make_camera))
+		.add_systems(Update, load_plane_models.before(Drawn))
 		.add_systems(
 			Update,
 			(
@@ -118,6 +166,59 @@ fn make_models(
 		fire: materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(14.0, 6.0, 1.5))),
 		flare_glow: materials.add(glow(Color::srgb(1.0, 0.95, 0.8), LinearRgba::rgb(30.0, 26.0, 18.0))),
 	});
+}
+
+/// Load the plane models that the build wrote beside the page, and fill in each one when its file arrived.
+fn load_plane_models(
+	mut models: ResMut<PlaneModels>,
+	mut asked: Local<bool>,
+	assets: Res<AssetServer>,
+	files: Res<Assets<Gltf>>,
+	meshes: Res<Assets<GltfMesh>>,
+	materials: Res<Assets<GltfMaterial>>,
+) {
+	if !*asked {
+		*asked = true;
+		page::fetch_text("assets/planes/planes.json", |text| {
+			MODEL_LIST.with_borrow_mut(|list| *list = text)
+		});
+	}
+	if let Some(text) = MODEL_LIST.with_borrow_mut(Option::take) {
+		let entries: Vec<ModelEntry> = serde_json::from_str(&text).unwrap_or_default();
+		models.0 = entries
+			.into_iter()
+			.map(|entry| PlaneModel {
+				kills: entry.kills,
+				file: assets.load(format!("planes/{}", entry.file)),
+				parts: None,
+			})
+			.collect();
+	}
+	for model in models.0.iter_mut().filter(|model| model.parts.is_none()) {
+		let Some(file) = files.get(&model.file) else { continue };
+		// The build names each mesh after its part.
+		let part_meshes = Part::ALL.map(|part| {
+			file.named_meshes
+				.get(format!("{part:?}").as_str())
+				.and_then(|mesh| meshes.get(mesh))
+		});
+		let Some(primitives) = part_meshes
+			.iter()
+			.map(|mesh| mesh.as_ref()?.primitives.first())
+			.collect::<Option<Vec<_>>>()
+		else {
+			continue;
+		};
+		let texture = primitives[0]
+			.material
+			.as_ref()
+			.and_then(|material| materials.get(material))
+			.and_then(|material| material.base_color_texture.clone());
+		let handles: Vec<Handle<Mesh>> = primitives.iter().map(|primitive| primitive.mesh.clone()).collect();
+		if let Ok(parts) = handles.try_into() {
+			model.parts = Some((parts, texture));
+		}
+	}
 }
 
 /// Return the ground of the rules as squares in two tones, which show speed and height.
@@ -271,6 +372,7 @@ fn show_planes(
 	mut commands: Commands,
 	game: Res<Game>,
 	models: Res<Models>,
+	plane_models: Res<PlaneModels>,
 	mut materials: ResMut<Assets<StandardMaterial>>,
 	mut planes: Query<(Entity, &PlaneView, &mut Transform, &mut Visibility), Without<PartView>>,
 	mut parts: Query<(&PartView, &mut Visibility), Without<PlaneView>>,
@@ -279,7 +381,11 @@ fn show_planes(
 	let me = game.session.as_ref().and_then(Session::game).map(sim::Match::me);
 	let mut drawn = HashSet::new();
 	for (entity, view, mut transform, mut visibility) in &mut planes {
-		let Some(state) = states.get(&view.0) else {
+		// A plane that left, and a plane whose pilot earned another model, get a new picture.
+		let state = states
+			.get(&view.0)
+			.filter(|state| plane_models.for_kills(state.kills) == view.1);
+		let Some(state) = state else {
 			commands.entity(entity).despawn();
 			continue;
 		};
@@ -300,25 +406,47 @@ fn show_planes(
 		};
 	}
 	for (&id, state) in states.iter().filter(|(id, _)| !drawn.contains(*id)) {
-		let body = materials.add(paint(id, me.unwrap_or(id)));
+		let colour = paint(id, me.unwrap_or(id));
+		let model = plane_models.for_kills(state.kills);
+		let loaded = model.and_then(|index| plane_models.0[index].parts.as_ref());
+		let body = materials.add(match loaded {
+			// The texture of the model shows through a light tint in the colour of the pilot.
+			Some((_, texture)) => StandardMaterial {
+				base_color: Color::WHITE.mix(&colour, 0.45),
+				base_color_texture: texture.clone(),
+				perceptual_roughness: 0.9,
+				..default()
+			},
+			None => colour.into(),
+		});
 		let root = (
-			PlaneView(id),
+			PlaneView(id, model),
 			Transform::from_translation(state.position).with_rotation(state.orientation),
 			Visibility::Hidden,
 		);
 		commands.spawn(root).with_children(|plane| {
 			for part in Part::ALL {
-				let material = if part == Part::Engine {
-					models.engine.clone()
-				} else {
-					body.clone()
+				let piece = match loaded {
+					// A mesh of a model is already in the frame of the plane.
+					Some((meshes, _)) => (
+						Mesh3d(meshes[part as usize].clone()),
+						MeshMaterial3d(body.clone()),
+						Transform::IDENTITY,
+					),
+					None => {
+						let material = if part == Part::Engine {
+							models.engine.clone()
+						} else {
+							body.clone()
+						};
+						(
+							Mesh3d(models.parts[part as usize].clone()),
+							MeshMaterial3d(material),
+							Transform::from_translation(part.centre()),
+						)
+					}
 				};
-				plane.spawn((
-					PartView(id, part),
-					Mesh3d(models.parts[part as usize].clone()),
-					MeshMaterial3d(material),
-					Transform::from_translation(part.centre()),
-				));
+				plane.spawn((PartView(id, part), piece));
 			}
 		});
 	}
