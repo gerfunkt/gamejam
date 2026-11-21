@@ -216,7 +216,7 @@ impl Plane {
 		*health <= 0.0
 	}
 
-	/// Make every part whole again. This is a hook of tests and playtests.
+	/// Make every part whole again, as a repair power-up does.
 	pub fn repair(&mut self) {
 		self.health = Part::ALL.map(Part::full_health);
 	}

@@ -267,3 +267,39 @@ fn a_weapons_power_up_fills_the_missile_rack_and_the_flare_rack_at_once() {
 	assert_eq!(bus.machine(FIRST).missiles_ready(me), Some(tuning::MISSILES));
 	assert_eq!(bus.machine(FIRST).flares_ready(me), Some(tuning::FLARES));
 }
+
+fn healths(game: &Match) -> Vec<f32> {
+	let plane = game.plane(PlaneId::Player(FIRST)).expect("the plane");
+	Part::ALL.map(|part| plane.health(part)).to_vec()
+}
+
+#[test]
+fn a_repair_power_up_makes_every_part_whole_again() {
+	let mut bus = bus(&[FIRST]);
+	let (place, power_up) = place_of(bus.machine(FIRST), PowerUpKind::Repair);
+	bus.place(FIRST, power_up.position, Quat::IDENTITY);
+	let plane = bus.machine(FIRST).plane_mut(PlaneId::Player(FIRST)).expect("the plane");
+	plane.damage(Part::Fuselage, 60.0);
+	plane.damage(Part::Tail, tuning::TAIL_HEALTH);
+	plane.damage(Part::Engine, tuning::ENGINE_HEALTH);
+	bus.step(|_, _| toward(Vec3::NEG_Z));
+	assert!(!present(&mut bus, FIRST, place));
+	assert_eq!(healths(bus.machine(FIRST)), Part::ALL.map(Part::full_health));
+}
+
+#[test]
+fn a_repair_that_arrives_after_the_loss_of_a_wing_does_not_repair() {
+	let mut bus = bus(&[FIRST]);
+	let (place, _) = place_of(bus.machine(FIRST), PowerUpKind::Repair);
+	let plane = bus.machine(FIRST).plane_mut(PlaneId::Player(FIRST)).expect("the plane");
+	plane.damage(Part::LeftWing, tuning::WING_HEALTH);
+	let before = healths(bus.machine(FIRST));
+	let claim = Message::Claim {
+		place,
+		plane: PlaneId::Player(FIRST),
+	};
+	let now = bus.now;
+	bus.machine(FIRST).receive(now, FIRST, &claim);
+	assert_eq!(healths(bus.machine(FIRST)), before, "a falling plane got a repair");
+	assert!(!present(&mut bus, FIRST, place), "the power-up is gone all the same");
+}
