@@ -25,8 +25,12 @@ const HIT_SECONDS: f32 = 0.12;
 const SIGHT_DISTANCE: f32 = 400.0;
 /// How long the praise for a kill shows, in seconds.
 const PRAISE_SECONDS: f32 = 2.5;
-/// The distance from the edge of the picture at which the marker of a plane outside it shows, in CSS pixels.
-const EDGE_INSET: f32 = 46.0;
+/// How far inside the edge of the picture the ring of the markers of planes outside it runs, across and up, in CSS pixels.
+///
+/// The ring is an ellipse, so it stays out of the corners, where the groups of the display are.
+const EDGE_RING: Vec2 = Vec2::new(72.0, 58.0);
+/// The distance below which two markers at the edge become one marker with a count, in CSS pixels.
+const MERGE_DISTANCE: f32 = 56.0;
 /// The widest angle off the nose at which a plane without a lock on it becomes the target, in radians.
 const TARGET_CONE: f32 = 0.5;
 /// The colour of an enemy on the radar.
@@ -708,32 +712,51 @@ fn show_display(
 		page::set_class("lock-box", "ready", closed >= 1.0);
 	}
 
-	// A marker on each other plane. A plane outside the picture has its marker at the edge.
-	let others: Vec<&(PlaneId, PlaneState)> = planes.iter().filter(|(id, state)| *id != me && state.alive).collect();
-	for (index, (id, state)) in others.iter().take(MARKERS).enumerate() {
-		let marker = format!("marker-{index}");
-		let seen = on_screen(state.position);
-		let place = seen.unwrap_or_else(|| {
-			// The direction of the plane across the picture, stretched until it meets the edge.
-			let local = camera_place.rotation.inverse() * (state.position - camera_place.translation);
-			let toward = Vec2::new(local.x, -local.y).normalize_or(Vec2::Y);
-			let reach = (size / 2.0 - EDGE_INSET) / toward.abs().max(Vec2::splat(1e-3));
-			size / 2.0 + toward * reach.min_element()
-		});
-		page::set_hidden(&marker, false);
-		page::set_text(
-			&marker,
-			&format!(
-				"{} {:.0} m",
-				session.name_of(*id),
-				state.position.distance(own.position)
-			),
-		);
-		move_to(&marker, place);
-		page::set_class(&marker, "safe", seen.is_some() && state.protected);
-		page::set_class(&marker, "edge", seen.is_none());
+	// A marker on each other plane. A plane outside the picture has its marker on a ring inside the
+	// edge, and markers there that would overlap become one marker with a count. The nearest plane
+	// keeps its own marker.
+	let mut others: Vec<&(PlaneId, PlaneState)> =
+		planes.iter().filter(|(id, state)| *id != me && state.alive).collect();
+	others.sort_by(|a, b| {
+		a.1.position
+			.distance(own.position)
+			.total_cmp(&b.1.position.distance(own.position))
+	});
+	let ring = (size / 2.0 - EDGE_RING).max(Vec2::ONE);
+	// Each marker that shows: its place, the plane, whether it is at the edge, and the planes that it stands for.
+	let mut shown: Vec<(Vec2, PlaneId, &PlaneState, bool, usize)> = Vec::new();
+	for (id, state) in &others {
+		if let Some(place) = on_screen(state.position) {
+			shown.push((place, *id, state, false, 1));
+			continue;
+		}
+		// The direction of the plane across the picture, stretched until it meets the ring.
+		let local = camera_place.rotation.inverse() * (state.position - camera_place.translation);
+		let toward = Vec2::new(local.x, -local.y).normalize_or(Vec2::Y);
+		let place = size / 2.0 + toward / (toward / ring).length();
+		match shown
+			.iter_mut()
+			.find(|(other, _, _, edge, _)| *edge && other.distance(place) < MERGE_DISTANCE)
+		{
+			Some((_, _, _, _, count)) => *count += 1,
+			None => shown.push((place, *id, state, true, 1)),
+		}
 	}
-	for index in others.len().min(MARKERS)..MARKERS {
+	for (index, (place, id, state, edge, count)) in shown.iter().take(MARKERS).enumerate() {
+		let marker = format!("marker-{index}");
+		let name = session.name_of(*id);
+		let label = match (edge, count) {
+			(false, _) => format!("{name} {:.0} m", state.position.distance(own.position)),
+			(true, 1) => name,
+			(true, _) => format!("{name} +{}", count - 1),
+		};
+		page::set_hidden(&marker, false);
+		page::set_text(&marker, &label);
+		move_to(&marker, *place);
+		page::set_class(&marker, "safe", !edge && state.protected);
+		page::set_class(&marker, "edge", *edge);
+	}
+	for index in shown.len().min(MARKERS)..MARKERS {
 		page::set_hidden(&format!("marker-{index}"), true);
 	}
 

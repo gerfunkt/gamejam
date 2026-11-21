@@ -91,7 +91,22 @@ const scenarios: Record<string, (browser: Browser) => Promise<void>> = {
 		await player.page.locator("#hud").waitFor({ state: "visible" });
 		await player.page.waitForTimeout(8_000);
 		await shot(player, "solo-early");
-		await player.page.waitForTimeout(37_000);
+		// The markers at the edge never overlap each other or the state of the own plane.
+		let crowded = 0;
+		for (let look = 0; look < 30; look++) {
+			await player.page.waitForTimeout(1_000);
+			crowded += await player.page.evaluate(() => {
+				const boxes = [...document.querySelectorAll<HTMLElement>(".marker.edge")]
+					.filter((marker) => !marker.hidden)
+					.map((marker) => marker.getBoundingClientRect());
+				const health = document.querySelector("#health")?.getBoundingClientRect();
+				const meet = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+				const pairs = boxes.flatMap((a, index) => boxes.slice(index + 1).map((b) => meet(a, b)));
+				return pairs.filter(Boolean).length + (health ? boxes.filter((box) => meet(box, health)).length : 0);
+			});
+		}
+		check(crowded === 0, `the markers at the edge never overlap each other or the state of the plane (${crowded} overlaps in 30 looks)`);
+		await player.page.waitForTimeout(7_000);
 		await shot(player, "solo");
 
 		const stat = last(player);
