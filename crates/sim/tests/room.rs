@@ -138,6 +138,7 @@ fn each_close_code_has_the_documented_number_and_reason() {
 		(CloseCode::NoSuchRoom, 4001, "no such room"),
 		(CloseCode::RoomFull, 4002, "room is full"),
 		(CloseCode::TooManyRooms, 4003, "too many rooms"),
+		(CloseCode::FellBehind, 4004, "fell behind"),
 	];
 	for (code, number, reason) in documented {
 		assert_eq!(code.code(), number);

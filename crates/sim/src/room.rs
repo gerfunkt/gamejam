@@ -175,6 +175,8 @@ pub enum CloseCode {
 	RoomFull = 4002,
 	/// The server already holds [`MAX_ROOMS`].
 	TooManyRooms = 4003,
+	/// The member fell too far behind in reading, and the bus removed it.
+	FellBehind = 4004,
 }
 
 impl CloseCode {
@@ -192,6 +194,7 @@ impl CloseCode {
 			CloseCode::NoSuchRoom => "no such room",
 			CloseCode::RoomFull => "room is full",
 			CloseCode::TooManyRooms => "too many rooms",
+			CloseCode::FellBehind => "fell behind",
 		}
 	}
 
@@ -203,6 +206,7 @@ impl CloseCode {
 			CloseCode::NoSuchRoom,
 			CloseCode::RoomFull,
 			CloseCode::TooManyRooms,
+			CloseCode::FellBehind,
 		]
 		.into_iter()
 		.find(|known| known.code() == code)
