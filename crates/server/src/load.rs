@@ -88,6 +88,7 @@ pub async fn run(target: &str, clients: usize, seconds: u64) -> Result<Report> {
 		let tcp = TcpStream::connect(target)
 			.await
 			.with_context(|| format!("cannot connect to {target}"))?;
+		tcp.set_nodelay(true).context("cannot turn off Nagle's algorithm")?;
 		let tls = connector
 			.connect(name.clone(), tcp)
 			.await

@@ -132,6 +132,10 @@ impl Site {
 				}
 			};
 			eprintln!("{peer} connected");
+			// Each message is small and the game cannot wait for Nagle's algorithm to join it to the next.
+			if let Err(error) = tcp.set_nodelay(true) {
+				eprintln!("{peer} keeps Nagle's algorithm: {error}");
+			}
 			let (site, acceptor) = (self.clone(), acceptor.clone());
 			tokio::spawn(async move {
 				match timeout(HANDSHAKE_TIMEOUT, acceptor.accept(tcp)).await {
