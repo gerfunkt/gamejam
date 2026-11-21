@@ -5,6 +5,9 @@
 # settings of its file apply. Write "not recorded" in a record field that nobody knows. Do not guess.
 
 [[plane]]
+# The model stands on its wheels, so pitch = -11.5 levels it: the propeller hub and the middle of the
+# tail are at the same height. The wings of this model sit about 2 m ahead of the wing boxes of the
+# rules. The plane is centred on its bounding box, so the boxes and the wings do not overlap.
 key = "wwi-fighter"
 model = "wwi-fighter/model.fbx"
 texture = "wwi-fighter/texture.png"
