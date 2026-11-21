@@ -3,5 +3,6 @@
 mod fbx;
 mod fit;
 mod geometry;
+mod glb;
 mod parts;
 mod scene;
