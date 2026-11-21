@@ -212,8 +212,8 @@ pub const BOT_POWERUP_TARGET_DISTANCE: f32 = 600.0;
 pub const BOT_IDLE_LEAD: f32 = 0.5;
 /// The radius of the ring on which a bot without a target circles, in metres.
 pub const BOT_IDLE_RADIUS: f32 = 600.0;
-/// The height at which a bot without a target circles, in metres.
-pub const BOT_IDLE_HEIGHT: f32 = 500.0;
+/// The height above `arena::clear_height` at which a bot without a target circles, in metres.
+pub const BOT_IDLE_CLEARANCE: f32 = 300.0;
 /// Inside this distance of its target, a bot that matches speed does so, in metres.
 pub const BOT_CHASE_RANGE: f32 = 400.0;
 /// The distance behind its target at which such a bot holds its speed, in metres.

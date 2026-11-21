@@ -1,7 +1,10 @@
 //! The terrain of the arena: the baked ground, and every height that must clear it.
 
 use glam::Vec3;
-use sim::{Match, Skill, arena, tuning, wire::Settings};
+use sim::{
+	Controls, Match, Skill, arena, tuning,
+	wire::{PlaneId, Settings},
+};
 
 const NO_BOTS: Settings = Settings {
 	bots: 0,
@@ -128,6 +131,11 @@ fn the_air_between_the_highest_ground_and_the_ceiling_holds_the_heights_of_a_fig
 		highest_spawn + tuning::BOT_SAFE_HEIGHT < tuning::CEILING,
 		"a spawn at {highest_spawn} m is too near to the ceiling"
 	);
+	let highest_idle = tuning::TERRAIN_MAX_RISE + tuning::BOT_IDLE_CLEARANCE;
+	assert!(
+		highest_idle + tuning::BOT_SAFE_HEIGHT < tuning::CEILING,
+		"an idle bot over the highest ground is too near to the ceiling"
+	);
 }
 
 #[test]
@@ -175,5 +183,44 @@ fn a_spawn_is_never_inside_the_ground_for_places_on_the_whole_spawn_ring() {
 				"a lowest spawn at {x} {z} is {lowest} m, and the ground on its way reaches {ground} m"
 			);
 		}
+	}
+}
+
+#[test]
+fn a_bot_without_a_target_flies_on_its_ring_without_meeting_the_ground_from_every_spawn() {
+	for seed in 0..12 {
+		let settings = Settings {
+			bots: 1,
+			skill: Skill::Pilot,
+		};
+		let mut game = Match::new(1, seed, settings);
+		game.set_room(&[1], 1);
+		game.plane_mut(game.me()).expect("the player").protect(f32::MAX);
+		let input = Controls {
+			aim: Vec3::NEG_Z,
+			throttle: 1.0,
+			boost: false,
+			fire: false,
+			launch: false,
+			flare: false,
+		};
+		let mut now = 1000.0;
+		let mut lowest_margin = f32::MAX;
+		for _ in 0..(120.0 / tuning::STEP) as u32 {
+			now += f64::from(tuning::STEP) * 1000.0;
+			game.step(now, &input);
+			game.drain_messages();
+			let bot = game.plane(PlaneId::Bot(0)).expect("the host flies the bot");
+			assert!(
+				!bot.is_destroyed(),
+				"seed {seed}: the idle bot crashed at {}",
+				bot.position
+			);
+			lowest_margin = lowest_margin.min(bot.position.y - arena::ground_height(bot.position.x, bot.position.z));
+		}
+		assert!(
+			lowest_margin > 20.0,
+			"seed {seed}: the bot came within {lowest_margin} m of the ground"
+		);
 	}
 }

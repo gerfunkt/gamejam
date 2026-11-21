@@ -182,7 +182,8 @@ pub fn bot_controls(
 		// A place a little ahead on a ring around the centre.
 		(None, None) => {
 			let angle = state.position.z.atan2(state.position.x) + tuning::BOT_IDLE_LEAD;
-			Vec3::new(angle.cos(), 0.0, angle.sin()) * tuning::BOT_IDLE_RADIUS + Vec3::Y * tuning::BOT_IDLE_HEIGHT
+			let ring = Vec3::new(angle.cos(), 0.0, angle.sin()) * tuning::BOT_IDLE_RADIUS;
+			ring + Vec3::Y * (arena::clear_height(ring.x, ring.z) + tuning::BOT_IDLE_CLEARANCE)
 		}
 	};
 	let to_goal = goal - state.position;
