@@ -1,0 +1,4 @@
+[tools]
+"aqua:git-bug/git-bug" = "latest"
+node = "lts"
+"npm:@moonshot-ai/kimi-code" = "latest"
