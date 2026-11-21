@@ -16,11 +16,14 @@ use self::{
 	parts::Regions,
 	propeller::{Disc, Stretch, remove_blades},
 };
-use crate::mesh::{
-	fbx,
-	geometry::Triangle,
-	orient::{Orientation, orient},
-	scene,
+use crate::{
+	image::Image,
+	mesh::{
+		fbx,
+		geometry::Triangle,
+		orient::{Orientation, orient},
+		scene,
+	},
 };
 
 mod fit;
@@ -32,7 +35,9 @@ mod propeller;
 
 /// The most triangles that a model may have, over all parts. A phone draws every plane of a match.
 const MAX_TRIANGLES: usize = 60_000;
-const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+/// The most pixels on a side of the texture of a model. A plane is seen from 20 m or further, so more
+/// pixels do not show, and a phone decodes and holds the texture of every model.
+const TEXTURE_SIDE: usize = 512;
 
 /// A model after the fit and the cut.
 struct Model {
@@ -91,11 +96,10 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 			fs::read(assets.join(&plane.model)).with_context(|| format!("cannot read the model of {}", plane.key))?;
 		let texture = fs::read(assets.join(&plane.texture))
 			.with_context(|| format!("cannot read the texture of {}", plane.key))?;
-		ensure!(
-			texture.starts_with(PNG_SIGNATURE),
-			"{}: the texture is not a PNG file",
-			plane.key
-		);
+		let texture = Image::decode(&texture)
+			.with_context(|| format!("cannot read the texture of {}", plane.key))?
+			.shrunk(TEXTURE_SIDE)
+			.encode()?;
 		let model = convert(
 			&fbx,
 			Orientation {

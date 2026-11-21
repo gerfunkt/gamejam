@@ -77,6 +77,36 @@ impl Image {
 		Ok(file)
 	}
 
+	/// Return the picture with at most `side` pixels in a row and in a column.
+	///
+	/// Each new pixel is the mean of a square block of old pixels. The block has a whole number of
+	/// pixels on a side, so the picture can become smaller than `side`. A picture that fits stays as it is.
+	#[must_use]
+	pub fn shrunk(&self, side: usize) -> Self {
+		let block = self.width.max(self.height).div_ceil(side.max(1));
+		if block <= 1 {
+			return self.clone();
+		}
+		let (width, height) = ((self.width / block).max(1), (self.height / block).max(1));
+		let pixels = (0..height)
+			.flat_map(|row| (0..width).map(move |column| (column, row)))
+			.map(|(column, row)| {
+				let mut sum = [0_usize; 3];
+				let mut count = 0;
+				for y in (row * block..(row + 1) * block).take_while(|y| *y < self.height) {
+					for x in (column * block..(column + 1) * block).take_while(|x| *x < self.width) {
+						for (total, channel) in sum.iter_mut().zip(self.pixels[y * self.width + x]) {
+							*total += usize::from(channel);
+						}
+						count += 1;
+					}
+				}
+				sum.map(|total| ((total + count / 2) / count) as u8)
+			})
+			.collect();
+		Self { width, height, pixels }
+	}
+
 	/// Return the colour at the texture coordinates `uv`, blended between the four nearest pixels.
 	///
 	/// The origin of `uv` is at the bottom left, as in FBX. A place outside the picture has the colour of the nearest edge.
@@ -105,6 +135,22 @@ impl Image {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn a_shrunk_picture_has_the_mean_of_each_block_and_a_small_picture_stays() {
+		let mut picture = Image::filled(4, 4, [10, 20, 30]);
+		picture.pixels[0] = [50, 20, 30];
+		let small = picture.shrunk(2);
+		assert_eq!((small.width, small.height), (2, 2), "four pixels become one");
+		assert_eq!(small.pixels[0], [20, 20, 30], "the mean of 50, 10, 10, and 10 is 20");
+		assert_eq!(small.pixels[3], [10, 20, 30], "a block of one colour keeps it");
+		assert_eq!(picture.shrunk(4), picture, "a picture that fits stays as it is");
+		assert_eq!(
+			Image::filled(5, 3, [1, 2, 3]).shrunk(2).width,
+			1,
+			"a block of three pixels fits once into five"
+		);
+	}
 
 	fn two_by_one() -> Image {
 		Image {
