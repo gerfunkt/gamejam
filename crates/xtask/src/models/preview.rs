@@ -9,7 +9,7 @@ use anyhow::Result;
 use glam::{Vec2, Vec3};
 use sim::Part;
 
-use super::geometry::Triangle;
+use crate::mesh::geometry::Triangle;
 
 /// The pixels for each metre.
 const SCALE: f32 = 60.0;
@@ -176,7 +176,7 @@ pub fn render(parts: &[(Part, Vec<Triangle>)]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::models::geometry::tests::vertex;
+	use crate::mesh::geometry::tests::vertex;
 
 	#[test]
 	fn a_filled_triangle_covers_its_area_in_pixels() {

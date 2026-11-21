@@ -7,7 +7,7 @@ use glam::Vec3;
 use serde::Deserialize;
 use sim::Part;
 
-use super::geometry::{Axis, Triangle, bounds};
+use crate::mesh::geometry::{Axis, Triangle, bounds};
 
 /// An axis of a model with a direction, written as `+X`, `-Z`, and so on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -152,7 +152,7 @@ pub fn fit(triangles: &mut [Triangle], target: (Vec3, Vec3)) -> Result<f32> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::models::geometry::tests::vertex;
+	use crate::mesh::geometry::tests::vertex;
 
 	fn triangle(corners: [[f32; 3]; 3]) -> Triangle {
 		corners.map(|[x, y, z]| vertex(x, y, z))

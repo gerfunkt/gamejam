@@ -13,18 +13,15 @@ use sim::Part;
 
 use self::{
 	fit::{Orientation, fit, orient, rules_box},
-	geometry::Triangle,
 	parts::Regions,
 };
+use crate::mesh::{fbx, geometry::Triangle, scene};
 
-mod fbx;
 mod fit;
-mod geometry;
 mod glb;
 mod manifest;
 mod parts;
 mod preview;
-mod scene;
 
 /// The most triangles that a model may have, over all parts. A phone draws every plane of a match.
 const MAX_TRIANGLES: usize = 60_000;
@@ -140,7 +137,8 @@ mod tests {
 
 	use glam::Vec3;
 
-	use super::{geometry::tests::vertex, *};
+	use super::*;
+	use crate::mesh::geometry::tests::vertex;
 
 	fn repository() -> PathBuf {
 		Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

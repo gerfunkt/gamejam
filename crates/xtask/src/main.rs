@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
+mod mesh;
 mod models;
 
 const USAGE: &str = "\

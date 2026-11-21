@@ -1,7 +1,7 @@
 //! A reader for the node tree of binary FBX files.
 //!
 //! The reader knows the file layout of FBX 7.x, versions 7100 to 7700. It does not know what the
-//! nodes mean. [`crate::models::scene`] reads the model from the tree.
+//! nodes mean. [`crate::mesh::scene`] reads the model from the tree.
 
 use anyhow::{Context, Result, bail, ensure};
 

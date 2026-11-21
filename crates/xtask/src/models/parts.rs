@@ -2,7 +2,7 @@
 
 use sim::Part;
 
-use super::geometry::{Axis, Plane, Triangle, bounds, clip};
+use crate::mesh::geometry::{Axis, Plane, Triangle, bounds, clip};
 
 /// How far past the fuselage box a piece must reach to count as a wing, as a part of the way to the widest point of the model.
 ///
@@ -147,7 +147,7 @@ mod tests {
 	use glam::Vec3;
 
 	use super::*;
-	use crate::models::geometry::{area, tests::vertex};
+	use crate::mesh::geometry::{area, tests::vertex};
 
 	impl Regions {
 		/// Return the part that owns `point`, by the same rules as the cuts.

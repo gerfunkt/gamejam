@@ -11,7 +11,7 @@ use glam::Vec3;
 use serde_json::{Value, json};
 use sim::Part;
 
-use super::geometry::Triangle;
+use crate::mesh::geometry::Triangle;
 
 const MAGIC: u32 = 0x4654_6C67;
 const JSON_CHUNK: u32 = 0x4E4F_534A;
@@ -197,7 +197,7 @@ mod tests {
 	use glam::Vec2;
 
 	use super::*;
-	use crate::models::geometry::{Vertex, tests::vertex};
+	use crate::mesh::geometry::{Vertex, tests::vertex};
 
 	fn word(bytes: &[u8], at: usize) -> u32 {
 		u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap())
