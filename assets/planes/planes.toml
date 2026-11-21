@@ -22,3 +22,38 @@ service = "Meshy AI"
 date = "2026-11-21"
 prompt = "not recorded"
 licence = "not recorded"
+
+[[plane]]
+# The model stands on its wheels, so pitch = -8 levels it: the propeller hub and the middle of the
+# tail are at the same height.
+key = "wwii-fighter"
+model = "wwii-fighter/model.fbx"
+texture = "wwii-fighter/texture.png"
+nose = "-X"
+up = "+Y"
+pitch = -8.0
+kills = 3
+
+[plane.record]
+author = "AresLiCa (commit 53aa00a on the branch graphic_assets)"
+service = "Meshy AI"
+date = "2026-11-21"
+prompt = "not recorded"
+licence = "not recorded"
+
+[[plane]]
+# The model is level as it is. The swept wings reach back to the tailplanes, so the cut finds the
+# end of the wings from the shape of the model.
+key = "f14-tomcat"
+model = "f14-tomcat/model.fbx"
+texture = "f14-tomcat/texture.png"
+nose = "-X"
+up = "+Y"
+kills = 6
+
+[plane.record]
+author = "AresLiCa (commit 53aa00a on the branch graphic_assets)"
+service = "Meshy AI"
+date = "2026-11-21"
+prompt = "not recorded"
+licence = "not recorded"
