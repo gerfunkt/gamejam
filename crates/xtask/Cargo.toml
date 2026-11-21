@@ -14,3 +14,4 @@ anyhow = "1"
 serde_json.workspace = true
 # Inflates the zlib-packed arrays of binary FBX files. Pure Rust, and already in the lock file.
 miniz_oxide = "0.9"
+glam.workspace = true
