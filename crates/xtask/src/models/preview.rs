@@ -9,6 +9,7 @@ use anyhow::Result;
 use glam::{Vec2, Vec3};
 use sim::Part;
 
+use super::propeller::Disc;
 use crate::{image::Image, mesh::geometry::Triangle};
 
 /// The pixels for each metre.
@@ -18,6 +19,8 @@ const TOP_HEIGHT: usize = 540;
 const SIDE_HEIGHT: usize = 300;
 const GAP: usize = 8;
 const BACKGROUND: [u8; 3] = [28, 30, 36];
+/// The colour of the line that shows the disc of the propeller from its edge.
+const PROPELLER: [u8; 3] = [255, 80, 255];
 
 fn colour(part: Part) -> [u8; 3] {
 	match part {
@@ -135,7 +138,7 @@ impl Canvas {
 	}
 }
 
-fn draw(parts: &[(Part, Vec<Triangle>)], view: View) -> Canvas {
+fn draw(parts: &[(Part, Vec<Triangle>)], propeller: Option<Disc>, view: View) -> Canvas {
 	let mut canvas = Canvas::new(view.height());
 	for (part, triangles) in parts {
 		for triangle in triangles {
@@ -150,21 +153,30 @@ fn draw(parts: &[(Part, Vec<Triangle>)], view: View) -> Canvas {
 		let (low, high) = (part.centre() - part.half_extents(), part.centre() + part.half_extents());
 		canvas.outline(view.project(low).0, view.project(high).0, colour(part));
 	}
+	if let Some(disc) = propeller {
+		// Both views see the disc from its edge, so it is a line across the nose.
+		let reach = Vec3::new(disc.radius, disc.radius, 0.0);
+		canvas.outline(
+			view.project(disc.centre - reach).0,
+			view.project(disc.centre + reach).0,
+			PROPELLER,
+		);
+	}
 	canvas
 }
 
-/// Draw the parts from above and from the side, and return the PNG file.
+/// Draw the parts from above and from the side, with the disc of the propeller as a line, and return the PNG file.
 ///
 /// # Errors
 ///
 /// Returns an error if the PNG encoder fails.
-pub fn render(parts: &[(Part, Vec<Triangle>)]) -> Result<Vec<u8>> {
+pub fn render(parts: &[(Part, Vec<Triangle>)], propeller: Option<Disc>) -> Result<Vec<u8>> {
 	let height = TOP_HEIGHT + GAP + SIDE_HEIGHT;
 	let mut pixels = Vec::with_capacity(WIDTH * height);
 	let mut push = |canvas: &Canvas| pixels.extend_from_slice(&canvas.pixels);
-	push(&draw(parts, View::Top));
+	push(&draw(parts, propeller, View::Top));
 	push(&Canvas::new(GAP));
-	push(&draw(parts, View::Side));
+	push(&draw(parts, propeller, View::Side));
 	Image {
 		width: WIDTH,
 		height,
@@ -236,7 +248,7 @@ mod tests {
 			Part::Tail,
 			vec![[vertex(0.0, 0.0, 3.0), vertex(1.0, 0.0, 3.0), vertex(0.0, 1.0, 4.0)]],
 		)];
-		let file = render(&parts).unwrap();
+		let file = render(&parts, None).unwrap();
 		let decoder = png::Decoder::new(std::io::Cursor::new(file));
 		let reader = decoder.read_info().unwrap();
 		let info = reader.info();

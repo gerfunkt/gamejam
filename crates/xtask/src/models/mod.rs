@@ -14,6 +14,7 @@ use sim::Part;
 use self::{
 	fit::{fit, rules_box},
 	parts::Regions,
+	propeller::{Disc, Stretch, remove_blades},
 };
 use crate::mesh::{
 	fbx,
@@ -27,6 +28,7 @@ mod glb;
 mod manifest;
 mod parts;
 mod preview;
+mod propeller;
 
 /// The most triangles that a model may have, over all parts. A phone draws every plane of a match.
 const MAX_TRIANGLES: usize = 60_000;
@@ -38,16 +40,22 @@ struct Model {
 	parts: Vec<(Part, Vec<Triangle>)>,
 	/// The factor between the units of the source file and metres.
 	scale: f32,
+	/// The disc of the propeller, whose blades are no longer in the parts.
+	propeller: Option<Disc>,
 }
 
-/// Turn the FBX file into the five parts of the plane of the rules.
-fn convert(fbx: &[u8], orientation: Orientation) -> Result<Model> {
+/// Turn the FBX file into the five parts of the plane of the rules, without the blades of a propeller in `blades`.
+fn convert(fbx: &[u8], orientation: Orientation, blades: Option<Stretch>) -> Result<Model> {
 	let mut triangles = scene::read(&fbx::parse(fbx)?)?;
 	orient(&mut triangles, orientation)?;
 	let scale = fit(&mut triangles, rules_box())?;
+	let propeller = blades
+		.map(|stretch| remove_blades(&mut triangles, stretch))
+		.transpose()?;
 	Ok(Model {
 		parts: Regions::for_model(&triangles).split(&triangles),
 		scale,
+		propeller,
 	})
 }
 
@@ -77,6 +85,7 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 	let planes = manifest::read(&assets.join("planes.toml"))?;
 	let output = root.join("web/assets/planes");
 	fs::create_dir_all(&output).with_context(|| format!("cannot create {}", output.display()))?;
+	let mut propellers = Vec::new();
 	for plane in &planes {
 		let fbx =
 			fs::read(assets.join(&plane.model)).with_context(|| format!("cannot read the model of {}", plane.key))?;
@@ -94,15 +103,17 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 				up: plane.up,
 				pitch: plane.pitch,
 			},
+			plane.propeller,
 		)
 		.with_context(|| format!("cannot convert the model of {}", plane.key))?;
 		check_budget(&plane.key, &model.parts)?;
+		propellers.push(model.propeller);
 		let glb = glb::encode(&model.parts, &texture)?;
 		let path = output.join(format!("{}.glb", plane.key));
 		fs::write(&path, &glb).with_context(|| format!("cannot write {}", path.display()))?;
 		if preview {
 			let path = assets.join(format!("{}-preview.png", plane.key));
-			fs::write(&path, preview::render(&model.parts)?)
+			fs::write(&path, preview::render(&model.parts, model.propeller)?)
 				.with_context(|| format!("cannot write {}", path.display()))?;
 		}
 		let counts: Vec<String> = model
@@ -121,18 +132,24 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 	}
 	fs::write(
 		output.join("planes.json"),
-		serde_json::to_string_pretty(&list(&planes))?,
+		serde_json::to_string_pretty(&list(&planes, &propellers))?,
 	)?;
 	Ok(())
 }
 
-/// Return the list of the models for the client, in the order of the kills.
-fn list(planes: &[manifest::Plane]) -> serde_json::Value {
-	let mut ordered: Vec<&manifest::Plane> = planes.iter().collect();
-	ordered.sort_by_key(|plane| plane.kills);
+/// Return the list of the models for the client, in the order of the kills, each with the disc of its propeller.
+fn list(planes: &[manifest::Plane], propellers: &[Option<Disc>]) -> serde_json::Value {
+	let mut ordered: Vec<(&manifest::Plane, &Option<Disc>)> = planes.iter().zip(propellers).collect();
+	ordered.sort_by_key(|(plane, _)| plane.kills);
 	ordered
 		.into_iter()
-		.map(|plane| json!({"key": plane.key, "file": format!("{}.glb", plane.key), "kills": plane.kills}))
+		.map(|(plane, propeller)| {
+			let mut entry = json!({"key": plane.key, "file": format!("{}.glb", plane.key), "kills": plane.kills});
+			if let Some(disc) = propeller {
+				entry["propeller"] = json!({"centre": disc.centre.to_array(), "radius": disc.radius});
+			}
+			entry
+		})
 		.collect()
 }
 
@@ -162,8 +179,14 @@ mod tests {
 				up: plane.up,
 				pitch: plane.pitch,
 			},
+			plane.propeller,
 		)
 		.unwrap();
+		let disc = model.propeller.expect("the first model has a propeller");
+		assert!(
+			disc.centre.x.abs() < 0.2 && disc.centre.z < -3.0 && (1.2..2.0).contains(&disc.radius),
+			"the propeller turns at the nose, about the middle of the plane: {disc:?}"
+		);
 		let triangles = |part: Part| model.parts.iter().find(|(owner, _)| *owner == part).unwrap().1.len();
 		let (left, right) = (triangles(Part::LeftWing), triangles(Part::RightWing));
 		assert!(
@@ -243,11 +266,18 @@ mod tests {
 			)
 		};
 		let planes = manifest::parse(&(entry("ace", 10) + &entry("rookie", 0))).unwrap();
-		let list = list(&planes);
+		let disc = Disc {
+			centre: Vec3::new(0.0, 0.5, -3.5),
+			radius: 1.25,
+		};
+		let list = list(&planes, &[None, Some(disc)]);
 		assert_eq!(
 			list,
-			json!([{"key": "rookie", "file": "rookie.glb", "kills": 0}, {"key": "ace", "file": "ace.glb", "kills": 10}]),
-			"the models by the number of kills"
+			json!([
+				{"key": "rookie", "file": "rookie.glb", "kills": 0, "propeller": {"centre": [0.0, 0.5, -3.5], "radius": 1.25}},
+				{"key": "ace", "file": "ace.glb", "kills": 10},
+			]),
+			"the models by the number of kills, and the propeller of the model that has one"
 		);
 	}
 }

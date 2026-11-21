@@ -3,6 +3,11 @@
 # A pilot flies the entry with the most kills that does not exceed the kills of the pilot.
 # Paths are relative to this file. `nose` and `up` name the axes of the model after the axis
 # settings of its file apply. Write "not recorded" in a record field that nobody knows. Do not guess.
+#
+# `propeller` names the stretch of the nose in which the blades turn, in metres ahead of the middle of
+# the plane, after the fit to the plane of the rules. The build takes out each separate piece of the
+# model that lies wholly in the stretch, and the client draws a blur in the place of the blades.
+# `cargo xtask models --preview` shows the result: the blades are gone, and a line marks the blur.
 
 [[plane]]
 # The model stands on its wheels, so pitch = -11.5 levels it: the propeller hub and the middle of the
@@ -15,6 +20,8 @@ nose = "-X"
 up = "+Y"
 pitch = -11.5
 kills = 0
+# The two blades are one flat piece at the tip of the nose.
+propeller = { from = 3.65, to = 3.9 }
 
 [plane.record]
 author = "AresLiCa (commit 96a0bc7 on the branch graphic_assets)"
@@ -33,6 +40,8 @@ nose = "-X"
 up = "+Y"
 pitch = -8.0
 kills = 3
+# The four blades are four pieces around the spinner.
+propeller = { from = 3.25, to = 3.8 }
 
 [plane.record]
 author = "AresLiCa (commit 53aa00a on the branch graphic_assets)"

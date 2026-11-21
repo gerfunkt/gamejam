@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 
+use super::propeller::Stretch;
 use crate::{mesh::orient::SignedAxis, record::Record};
 
 /// One plane model.
@@ -26,6 +27,8 @@ pub struct Plane {
 	pub pitch: f32,
 	/// The number of kills from which a pilot flies this model.
 	pub kills: u32,
+	/// Where the blades of the propeller are, if the model has one. The build takes them out, and the client draws a blur.
+	pub propeller: Option<Stretch>,
 	/// The origin of the model.
 	pub record: Record,
 }
@@ -42,8 +45,8 @@ struct Manifest {
 /// # Errors
 ///
 /// Returns an error if the text is not a valid manifest, if two entries share a key or a number of
-/// kills, if a key is not a file name in lowercase letters, digits, and hyphens, or if no entry
-/// starts at 0 kills, because a new pilot needs a model.
+/// kills, if a key is not a file name in lowercase letters, digits, and hyphens, if a propeller ends
+/// before it starts, or if no entry starts at 0 kills, because a new pilot needs a model.
 pub fn parse(text: &str) -> Result<Vec<Plane>> {
 	let Manifest { plane: planes } = toml::from_str(text).context("planes.toml is not valid")?;
 	for (index, plane) in planes.iter().enumerate() {
@@ -62,6 +65,17 @@ pub fn parse(text: &str) -> Result<Vec<Plane>> {
 				"`{}` and `{key}` both start at {} kills; give them different numbers",
 				other.key,
 				plane.kills
+			);
+		}
+	}
+	for plane in &planes {
+		if let Some(stretch) = plane.propeller {
+			ensure!(
+				stretch.from < stretch.to,
+				"`{}`: the propeller must start before it ends, and `from` is {} and `to` is {}",
+				plane.key,
+				stretch.from,
+				stretch.to
 			);
 		}
 	}
@@ -119,6 +133,23 @@ licence = "not recorded"
 		let with_pitch = entry("a", 0).replace("kills = 0", "pitch = -12.5\nkills = 0");
 		assert_eq!(parse(&with_pitch).unwrap()[0].pitch, -12.5, "the pitch of the entry");
 		assert_eq!(parse(&entry("a", 0)).unwrap()[0].pitch, 0.0, "no pitch means level");
+	}
+
+	#[test]
+	fn a_propeller_is_read_and_must_start_before_it_ends() {
+		let with = |propeller: &str| entry("a", 0).replace("kills = 0", &format!("kills = 0\npropeller = {propeller}"));
+		assert_eq!(
+			parse(&with("{ from = 3.5, to = 3.9 }")).unwrap()[0].propeller,
+			Some(Stretch { from: 3.5, to: 3.9 }),
+			"the stretch of the entry"
+		);
+		assert_eq!(
+			parse(&entry("a", 0)).unwrap()[0].propeller,
+			None,
+			"a jet has no propeller"
+		);
+		let message = parse(&with("{ from = 3.9, to = 3.5 }")).unwrap_err().to_string();
+		assert!(message.contains("`a`"), "the message names the model: {message}");
 	}
 
 	#[test]
