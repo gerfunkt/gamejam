@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292357,"nonce":"y0Q/zbDQytHKT4TW2PwrcgC6D1E=","message":"Built Bevy 0.20 WebGPU client and xtask build/serve; verified 25 s headless Chromium solo match at 59 fps with 93 hits, 5 kills, 6 missiles, and 0 errors.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292357,"nonce":"KGfZ9h1+fG4kwEgKrI52N0WcAFs=","status":2}]}
