@@ -406,7 +406,8 @@ mod tests {
 
 	use futures_util::{SinkExt, StreamExt};
 	use sim::room::{
-		CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, RoomStatus, split_frame,
+		CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, MAX_TITLE_CHARS, OPEN_ROOM_ID, RoomStatus,
+		frame, split_frame,
 	};
 	use tokio::io::DuplexStream;
 	use tokio::time::timeout;
@@ -452,6 +453,18 @@ mod tests {
 
 		async fn status(&mut self) -> RoomStatus {
 			self.status_within(Duration::from_secs(5)).await
+		}
+
+		/// Return the first status that satisfies `wanted`, and skip everything else.
+		async fn status_where(&mut self, wanted: impl Fn(&RoomStatus) -> bool) -> RoomStatus {
+			loop {
+				if let Message::Text(text) = self.next().await {
+					let status = RoomStatus::parse_frame(&text).expect("the text must be a room status");
+					if wanted(&status) {
+						return status;
+					}
+				}
+			}
 		}
 
 		async fn status_within(&mut self, limit: Duration) -> RoomStatus {
@@ -894,5 +907,112 @@ mod tests {
 			"the member that still answers owns the room"
 		);
 		assert_eq!(bus.rooms()[0].members, 1, "the silent member left the room");
+	}
+
+	/// Name a frame by what the test checks: the members of a status, or the text of a message.
+	fn describe(frame: &Message) -> String {
+		match frame {
+			Message::Text(text) => format!(
+				"status {:?}",
+				RoomStatus::parse_frame(text).expect("a room status").members
+			),
+			Message::Binary(frame) => String::from_utf8_lossy(split_frame(frame).expect("a sender").1).into_owned(),
+			other => panic!("unexpected frame {other:?}"),
+		}
+	}
+
+	#[tokio::test]
+	async fn a_kick_of_a_member_of_another_room_does_nothing() {
+		let bus = Bus::new();
+		let (mut mine, _) = room_of(&bus, "Mine").await;
+		let (mut other, _) = room_of(&bus, "Other").await;
+		mine.send_text("kick:2").await;
+		mine.send_binary(b"barrier").await;
+		assert_eq!(
+			mine.binary().await,
+			(1, b"barrier".to_vec()),
+			"the owner sees that its text was handled"
+		);
+		other.send_binary(b"still here").await;
+		assert_eq!(
+			other.binary().await,
+			(2, b"still here".to_vec()),
+			"the other member was not removed"
+		);
+		assert_eq!(
+			bus.rooms().iter().map(|room| room.members).collect::<Vec<_>>(),
+			[0, 1, 1]
+		);
+	}
+
+	#[tokio::test]
+	async fn the_control_rights_pass_to_the_next_owner_when_the_owner_leaves() {
+		let bus = Bus::new();
+		let (mut first, id) = room_of(&bus, "Hall").await;
+		let mut second = Client::join(&bus, Join::Room(id.clone())).await;
+		let mut third = Client::join(&bus, Join::Room(id)).await;
+		first.ws.close(None).await.expect("the close must go out");
+		drop(first);
+		second.status_where(|status| status.owner == 2).await;
+		third.send_text("title:Third").await;
+		third.send_binary(b"barrier").await;
+		while third.next().await != Message::Binary(frame(3, b"barrier").into()) {}
+		assert_eq!(
+			bus.rooms()[1].title,
+			"Hall",
+			"a member that is not the owner cannot rename the room"
+		);
+		second.send_text("title:Second").await;
+		let renamed = second.status_where(|status| status.title == "Second").await;
+		assert_eq!(renamed.owner, 2, "the new owner can rename the room");
+	}
+
+	#[tokio::test]
+	async fn a_status_keeps_its_place_between_binary_messages_for_all_members() {
+		let bus = Bus::new();
+		let mut first = Client::join(&bus, Join::Open).await;
+		let mut second = Client::join(&bus, Join::Open).await;
+		second.status().await;
+		first.send_binary(b"x").await;
+		let mut seen_first = Vec::new();
+		while seen_first.last() != Some(&"x".to_owned()) {
+			seen_first.push(describe(&first.next().await));
+		}
+		let mut third = Client::join(&bus, Join::Open).await;
+		third.status().await;
+		first.send_binary(b"y").await;
+		while seen_first.last() != Some(&"y".to_owned()) {
+			seen_first.push(describe(&first.next().await));
+		}
+		let mut seen_second = Vec::new();
+		while seen_second.last() != Some(&"y".to_owned()) {
+			seen_second.push(describe(&second.next().await));
+		}
+		let tail = |seen: &[String]| seen[seen.len() - 3..].to_vec();
+		assert_eq!(
+			tail(&seen_first),
+			["x", "status [1, 2, 3]", "y"],
+			"the status sits between the messages"
+		);
+		assert_eq!(
+			tail(&seen_first),
+			tail(&seen_second),
+			"every member sees the same order"
+		);
+	}
+
+	#[tokio::test]
+	async fn a_title_is_cut_to_32_characters() {
+		let bus = Bus::new();
+		let (mut owner, _) = room_of(&bus, "Short").await;
+		owner.send_text(&format!("title:{}", "é".repeat(40))).await;
+		assert_eq!(owner.status().await.title, "é".repeat(MAX_TITLE_CHARS));
+		let created = Client::join(&bus, Join::Create("x".repeat(40))).await;
+		drop(created);
+		assert_eq!(
+			bus.rooms()[1].title.chars().count(),
+			MAX_TITLE_CHARS,
+			"the title of a new room is cut too"
+		);
 	}
 }
