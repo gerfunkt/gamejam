@@ -10,3 +10,6 @@
 # The plane models that `cargo xtask models` writes.
 /web/assets/planes/
 /assets/planes/*-preview.png
+# The raw terrain model and its textures, which are too large for git. `cargo xtask terrain` reads them.
+/assets/terrain/raw/
+/assets/terrain/map-preview.png
