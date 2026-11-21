@@ -160,6 +160,15 @@ pub enum Message {
 		/// The velocity with which it starts, in m/s.
 		velocity: Vec3,
 	},
+	/// A claim of a plane of the sender on the power-up at a place. Every machine gives the power-up
+	/// to the plane of the first claim that the bus delivers. A later claim for a power-up that is
+	/// gone does nothing.
+	Claim {
+		/// The place of the power-up, as its index in [`crate::Match::power_ups`].
+		place: u8,
+		/// The plane that claims the power-up.
+		plane: PlaneId,
+	},
 	/// The host ends the match, and every player sees the results.
 	EndMatch,
 	/// The lobby of the room, as its host holds it.

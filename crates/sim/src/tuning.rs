@@ -178,6 +178,25 @@ pub const FLARE_DRAG: f32 = 1.0;
 /// How fast a flare falls faster, in m/s².
 pub const FLARE_FALL: f32 = 9.8;
 
+// Power-ups.
+
+/// The places of the power-ups in the sky, as the X, Y, and Z of each place in metres. Each lies
+/// inside half of the arena, and far above the terrain, at a height where planes fight.
+pub const POWERUP_PLACES: [[f32; 3]; 8] = [
+	[900.0, 450.0, 0.0],
+	[320.0, 560.0, 320.0],
+	[0.0, 480.0, 900.0],
+	[-320.0, 420.0, 320.0],
+	[-900.0, 540.0, 0.0],
+	[-320.0, 500.0, -320.0],
+	[0.0, 580.0, -900.0],
+	[320.0, 440.0, -320.0],
+];
+/// A plane takes a power-up when its centre comes this near to the power-up, in metres.
+pub const POWERUP_RADIUS: f32 = 30.0;
+/// The time until a power-up that a plane took returns, in seconds.
+pub const POWERUP_RETURN_SECONDS: f32 = 20.0;
+
 // Bots.
 
 /// How far ahead on its ring a bot without a target aims, in radians.

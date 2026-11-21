@@ -392,6 +392,15 @@ fn each_message_survives_the_wire() {
 			missile: 7,
 			position: Vec3::NEG_ONE,
 		},
+		Message::Flare {
+			plane: PlaneId::Bot(1),
+			position: Vec3::Y,
+			velocity: Vec3::NEG_Z,
+		},
+		Message::Claim {
+			place: 7,
+			plane: PlaneId::Player(3),
+		},
 		Message::EndMatch,
 		Message::Lobby {
 			settings: Settings {

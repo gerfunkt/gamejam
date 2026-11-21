@@ -9,6 +9,7 @@ use crate::{
 	gun::{Bullet, Gun, hit_part_along},
 	missile::{Flare, FlareRack, Launcher, Missile, burst_damage},
 	plane::{Controls, Part, Plane},
+	powerup::{PowerUp, PowerUpKind},
 	rng::Rng,
 	timeline::Timeline,
 	tuning,
@@ -47,6 +48,13 @@ pub enum Event {
 	Burst {
 		/// The place of the burst, in metres.
 		position: Vec3,
+	},
+	/// A plane took a power-up. Every machine sees it, in the order of the bus.
+	PowerUp {
+		/// The plane that took it.
+		plane: PlaneId,
+		/// What the power-up gave.
+		kind: PowerUpKind,
 	},
 }
 
@@ -117,6 +125,7 @@ pub struct Match {
 	bullets: Vec<Bullet>,
 	missiles: Vec<Missile>,
 	flares: Vec<Flare>,
+	power_ups: Vec<PowerUp>,
 	outbox: Vec<Message>,
 	events: Vec<Event>,
 }
@@ -142,6 +151,7 @@ impl Match {
 			bullets: Vec::new(),
 			missiles: Vec::new(),
 			flares: Vec::new(),
+			power_ups: PowerUp::all(),
 			outbox: Vec::new(),
 			events: Vec::new(),
 		};
@@ -186,6 +196,7 @@ impl Match {
 		}
 		let seen = self.planes();
 		self.fly_locals(input, &seen, dt);
+		self.claim_power_ups(dt);
 		let planes = self.planes();
 		self.fire_guns(&planes, dt);
 		self.move_bullets(&planes, dt);
@@ -261,6 +272,11 @@ impl Match {
 			} => {
 				if self.may_fly(sender, plane) {
 					self.flares.push(Flare::new(plane, position, velocity));
+				}
+			}
+			Message::Claim { place, plane } => {
+				if self.may_fly(sender, plane) {
+					self.take_power_up(place, plane);
 				}
 			}
 			Message::EndMatch | Message::Lobby { .. } | Message::Profile { .. } => {}
@@ -351,6 +367,12 @@ impl Match {
 	#[must_use]
 	pub fn flares(&self) -> &[Flare] {
 		&self.flares
+	}
+
+	/// Return the power-ups of the arena, in the order of their places.
+	#[must_use]
+	pub fn power_ups(&self) -> &[PowerUp] {
+		&self.power_ups
 	}
 
 	/// Return the missiles in flight.
@@ -456,6 +478,46 @@ impl Match {
 				Self::go_down(local, killer, &mut self.outbox);
 			}
 		}
+	}
+
+	/// Return the power-ups that come back, and claim those that a plane of this machine reaches.
+	///
+	/// A power-up goes when the bus delivers its claim, on every machine alike.
+	fn claim_power_ups(&mut self, dt: f32) {
+		for power_up in &mut self.power_ups {
+			power_up.step(dt);
+		}
+		for local in self
+			.locals
+			.iter()
+			.filter(|local| local.respawn.is_none() && !local.plane.is_falling())
+		{
+			for (place, power_up) in self.power_ups.iter_mut().enumerate() {
+				if power_up.is_reached_by(local.plane.position) {
+					power_up.ask();
+					self.outbox.push(Message::Claim {
+						place: place as u8,
+						plane: local.id,
+					});
+				}
+			}
+		}
+	}
+
+	/// Give the power-up at `place` to `plane`, if the power-up is still there.
+	fn take_power_up(&mut self, place: u8, plane: PlaneId) {
+		let Some(power_up) = self
+			.power_ups
+			.get_mut(usize::from(place))
+			.filter(|power_up| power_up.present)
+		else {
+			return;
+		};
+		power_up.take();
+		self.events.push(Event::PowerUp {
+			plane,
+			kind: power_up.kind,
+		});
 	}
 
 	/// Take a destroyed plane out of the fight, and tell every machine.
