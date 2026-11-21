@@ -10,6 +10,8 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
+mod models;
+
 const USAGE: &str = "\
 cargo xtask serve [--release] [-- <server options>]
     Build the game, and serve it over HTTPS with the message bus. Open the printed address.

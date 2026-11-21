@@ -12,3 +12,5 @@ workspace = true
 anyhow = "1"
 # Reads the messages of `cargo build --message-format=json`, which name the built .wasm file.
 serde_json.workspace = true
+# Inflates the zlib-packed arrays of binary FBX files. Pure Rust, and already in the lock file.
+miniz_oxide = "0.9"
