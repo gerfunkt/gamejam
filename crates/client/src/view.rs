@@ -50,8 +50,14 @@ struct Models {
 	engine: Handle<StandardMaterial>,
 	tracer: Handle<Mesh>,
 	tracer_glow: Handle<StandardMaterial>,
-	missile: Handle<Mesh>,
+	/// The body, the nose, and one pair of fins of a missile.
+	missile: [Handle<Mesh>; 3],
 	missile_paint: Handle<StandardMaterial>,
+	missile_trim: Handle<StandardMaterial>,
+	/// The ring of a power-up, and the sign in it for each kind.
+	ring: Handle<Mesh>,
+	signs: [Handle<Mesh>; 3],
+	power_glow: [Handle<StandardMaterial>; 3],
 	ball: Handle<Mesh>,
 	fire: Handle<StandardMaterial>,
 	flare_glow: Handle<StandardMaterial>,
@@ -112,6 +118,10 @@ struct MissileView;
 #[derive(Component)]
 struct FlareView;
 
+/// The icon of the power-up at this place of the list of the rules.
+#[derive(Component)]
+struct PowerUpView(usize);
+
 /// A ball of fire, with its age in seconds and its largest radius in metres.
 #[derive(Component)]
 struct Burst {
@@ -136,6 +146,7 @@ pub fn plugin(app: &mut App) {
 				show_tracers,
 				show_missiles,
 				show_flares,
+				show_power_ups,
 				show_bursts,
 				follow,
 			)
@@ -166,8 +177,25 @@ fn make_models(
 		engine: materials.add(Color::srgb(0.25, 0.25, 0.28)),
 		tracer: meshes.add(Cuboid::new(0.3, 0.3, 9.0)),
 		tracer_glow: materials.add(glow(Color::srgb(1.0, 0.9, 0.5), LinearRgba::rgb(12.0, 9.0, 3.0))),
-		missile: meshes.add(Cuboid::new(0.5, 0.5, 3.2)),
-		missile_paint: materials.add(glow(Color::srgb(1.0, 1.0, 1.0), LinearRgba::rgb(6.0, 6.0, 6.0))),
+		// A missile is a white tube with a red nose and two crossed pairs of fins.
+		missile: [
+			meshes.add(Cylinder::new(0.28, 3.0)),
+			meshes.add(Cone::new(0.28, 0.9)),
+			meshes.add(Cuboid::new(1.5, 0.06, 0.7)),
+		],
+		missile_paint: materials.add(Color::srgb(0.93, 0.93, 0.95)),
+		missile_trim: materials.add(Color::srgb(0.8, 0.15, 0.12)),
+		ring: meshes.add(Torus::new(8.5, 10.0)),
+		signs: [
+			meshes.add(Cone::new(3.5, 9.0)),
+			meshes.add(Capsule3d::new(1.6, 7.0)),
+			meshes.add(Cuboid::new(9.0, 3.0, 3.0)),
+		],
+		power_glow: [
+			materials.add(glow(Color::srgb(0.3, 0.8, 1.0), LinearRgba::rgb(2.0, 7.0, 10.0))),
+			materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(10.0, 5.0, 1.0))),
+			materials.add(glow(Color::srgb(0.4, 1.0, 0.5), LinearRgba::rgb(2.0, 10.0, 3.0))),
+		],
 		ball: meshes.add(Sphere::new(1.0)),
 		fire: materials.add(glow(Color::srgb(1.0, 0.6, 0.2), LinearRgba::rgb(14.0, 6.0, 1.5))),
 		flare_glow: materials.add(glow(Color::srgb(1.0, 0.95, 0.8), LinearRgba::rgb(30.0, 26.0, 18.0))),
@@ -510,17 +538,89 @@ fn show_missiles(
 		match pool.next() {
 			Some((mut transform, mut visibility)) => (*transform, *visibility) = (place, Visibility::Inherited),
 			None => {
-				commands.spawn((
-					MissileView,
-					Mesh3d(models.missile.clone()),
-					MeshMaterial3d(models.missile_paint.clone()),
-					place,
-				));
+				// The shapes of the engine stand upright, and a missile flies toward its own -Z.
+				let along = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+				let [body, nose, fins] = models.missile.clone();
+				commands
+					.spawn((MissileView, place, Visibility::Inherited))
+					.with_children(|missile| {
+						missile.spawn((
+							Mesh3d(body),
+							MeshMaterial3d(models.missile_paint.clone()),
+							Transform::from_rotation(along),
+						));
+						missile.spawn((
+							Mesh3d(nose),
+							MeshMaterial3d(models.missile_trim.clone()),
+							Transform::from_xyz(0.0, 0.0, -1.95).with_rotation(along),
+						));
+						for turn in [0.0, std::f32::consts::FRAC_PI_2] {
+							missile.spawn((
+								Mesh3d(fins.clone()),
+								MeshMaterial3d(models.missile_trim.clone()),
+								Transform::from_xyz(0.0, 0.0, 1.2).with_rotation(Quat::from_rotation_z(turn)),
+							));
+						}
+					});
 			}
 		}
 	}
 	for (_, mut visibility) in pool {
 		*visibility = Visibility::Hidden;
+	}
+}
+
+/// Show each power-up that is there as a ring that turns, with the sign of its kind in it.
+fn show_power_ups(
+	mut commands: Commands,
+	game: Res<Game>,
+	models: Res<Models>,
+	time: Res<Time>,
+	mut icons: Query<(&PowerUpView, &mut Transform, &mut Visibility)>,
+) {
+	let power_ups = game
+		.session
+		.as_ref()
+		.and_then(Session::game)
+		.map(sim::Match::power_ups)
+		.unwrap_or_default();
+	let turn = Quat::from_rotation_y(time.elapsed_secs() * 1.2);
+	let mut drawn = 0;
+	for (icon, mut transform, mut visibility) in &mut icons {
+		drawn += 1;
+		match power_ups.get(icon.0) {
+			Some(power_up) if power_up.present => {
+				(*transform, *visibility) = (
+					Transform::from_translation(power_up.position).with_rotation(turn),
+					Visibility::Inherited,
+				);
+			}
+			_ => *visibility = Visibility::Hidden,
+		}
+	}
+	for (place, power_up) in power_ups.iter().enumerate().skip(drawn) {
+		let kind = power_up.kind as usize;
+		let (ring, sign, glow) = (
+			models.ring.clone(),
+			models.signs[kind].clone(),
+			models.power_glow[kind].clone(),
+		);
+		// The ring stands upright, so a pilot sees it from the side as a gate to fly through.
+		let upright = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+		commands
+			.spawn((
+				PowerUpView(place),
+				Transform::from_translation(power_up.position),
+				Visibility::Hidden,
+			))
+			.with_children(|icon| {
+				icon.spawn((
+					Mesh3d(ring),
+					MeshMaterial3d(glow.clone()),
+					Transform::from_rotation(upright),
+				));
+				icon.spawn((Mesh3d(sign), MeshMaterial3d(glow)));
+			});
 	}
 }
 

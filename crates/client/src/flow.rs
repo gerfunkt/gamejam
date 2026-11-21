@@ -267,7 +267,14 @@ impl Game {
 		if self.bot_pilot {
 			let planes = game.planes();
 			let state = planes.iter().find(|(id, _)| *id == me)?.1;
-			return Some(bot_controls(me, &state, &planes, game.missiles(), Skill::Ace));
+			return Some(bot_controls(
+				me,
+				&state,
+				&planes,
+				game.missiles(),
+				game.power_ups(),
+				Skill::Ace,
+			));
 		}
 		let plane = game.plane(me)?;
 		if self.screen == Screen::Playing {

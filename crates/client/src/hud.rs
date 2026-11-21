@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use sim::{
-	Event, Part, Phase, Session, Skill,
+	Event, Part, Phase, PowerUp, PowerUpKind, Session, Skill,
 	room::MAX_MEMBERS,
 	tuning,
 	wire::{MAX_BOTS, PlaneId, PlaneState},
@@ -450,7 +450,13 @@ struct Memory {
 }
 
 /// Draw the radar: the planes around the player from above, with the nose of the player at the top.
-fn draw_radar(own: &PlaneState, me: PlaneId, planes: &[(PlaneId, PlaneState)], missiles: &[sim::Missile]) {
+fn draw_radar(
+	own: &PlaneState,
+	me: PlaneId,
+	planes: &[(PlaneId, PlaneState)],
+	missiles: &[sim::Missile],
+	power_ups: &[PowerUp],
+) {
 	let Some(context) = page::canvas("radar") else { return };
 	let (size, range) = (176.0_f64, f64::from(RADAR_RANGE));
 	let (centre, radius) = (size / 2.0, size / 2.0 - 4.0);
@@ -487,6 +493,14 @@ fn draw_radar(own: &PlaneState, me: PlaneId, planes: &[(PlaneId, PlaneState)], m
 		);
 		context.fill();
 	};
+	for power_up in power_ups.iter().filter(|power_up| power_up.present) {
+		let colour = match power_up.kind {
+			PowerUpKind::Speed => "#4fc8ff",
+			PowerUpKind::Weapons => "#ff9a3d",
+			PowerUpKind::Repair => "#6fd08c",
+		};
+		dot(power_up.position, colour, 2.0);
+	}
 	for (id, state) in planes.iter().filter(|(id, state)| *id != me && state.alive) {
 		let colour = match (state.protected, state.lock == Some(me), id) {
 			(true, ..) => "#93a3b8",
@@ -597,11 +611,25 @@ fn show_display(
 					memory.praise = (format!("You destroyed {}", session.name_of(*victim)), PRAISE_SECONDS);
 				}
 			}
+			Event::PowerUp { plane, kind } if *plane == me => {
+				let gain = match kind {
+					PowerUpKind::Speed => "Speed Up",
+					PowerUpKind::Weapons => "Missiles and Flares Full",
+					PowerUpKind::Repair => "Plane Repaired",
+				};
+				memory.praise = (gain.to_owned(), PRAISE_SECONDS);
+			}
 			_ => {}
 		}
 	}
 	page::set_class("hud", "hurt", memory.hurt > 0.0 && !game.options.calm);
-	page::set_text("praise", if memory.praise.1 > 0.0 { &memory.praise.0 } else { "" });
+	let haste = own.speed_up_left();
+	let praise = match (memory.praise.1 > 0.0, haste > 0.0) {
+		(true, _) => memory.praise.0.clone(),
+		(false, true) => format!("Speed Up: {haste:.0} s"),
+		(false, false) => String::new(),
+	};
+	page::set_text("praise", &praise);
 
 	// The gun sight, which shows each hit of the player for a moment.
 	let sight = on_screen(own.position + own.forward() * SIGHT_DISTANCE).filter(|_| alive);
@@ -769,5 +797,5 @@ fn show_display(
 		.collect();
 	page::set_rows("score-rows", "tr", &rows);
 
-	draw_radar(&own_state, me, &planes, running.missiles());
+	draw_radar(&own_state, me, &planes, running.missiles(), running.power_ups());
 }
