@@ -15,6 +15,7 @@ mod plane;
 mod rng;
 pub mod room;
 mod steer;
+mod timeline;
 pub mod tuning;
 pub mod wire;
 
@@ -25,3 +26,4 @@ pub use gun::{Bullet, hit_part};
 pub use missile::{Missile, burst_damage};
 pub use plane::{Controls, Part, Plane};
 pub use steer::{Steering, aim_direction, level_frame, steer_toward};
+pub use timeline::Timeline;

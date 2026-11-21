@@ -9,6 +9,7 @@ use crate::{
 	missile::{Launcher, Missile, burst_damage},
 	plane::{Controls, Part, Plane},
 	rng::Rng,
+	timeline::Timeline,
 	tuning,
 	wire::{Message, PlaneId, PlaneState, Settings},
 };
@@ -89,6 +90,8 @@ impl Local {
 /// A plane that another machine flies, as this machine knows it.
 #[derive(Clone, Debug, Default)]
 struct Remote {
+	timeline: Timeline,
+	/// The plane as this machine shows it in the current step.
 	shown: Option<PlaneState>,
 	gun: Gun,
 }
@@ -172,6 +175,9 @@ impl Match {
 	pub fn step(&mut self, now: f64, input: &Controls) {
 		let dt = tuning::STEP;
 		self.steps += 1;
+		for remote in self.remotes.values_mut() {
+			remote.shown = remote.timeline.sample(now);
+		}
 		let seen = self.planes();
 		self.fly_locals(input, &seen, dt);
 		let planes = self.planes();
@@ -195,11 +201,11 @@ impl Match {
 	///
 	/// `now` is the clock of this machine in milliseconds. The machine also receives its own
 	/// messages here, in the order in which every machine sees them.
-	pub fn receive(&mut self, _now: f64, sender: u32, message: &Message) {
+	pub fn receive(&mut self, now: f64, sender: u32, message: &Message) {
 		match *message {
-			Message::State { plane, state, .. } => {
+			Message::State { plane, clock, state } => {
 				if self.may_fly(sender, plane) && !self.flies(plane) {
-					self.remotes.entry(plane).or_default().shown = Some(state);
+					self.remotes.entry(plane).or_default().timeline.push(clock, state, now);
 				}
 			}
 			Message::Hit {

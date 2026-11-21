@@ -196,3 +196,30 @@ pub const SPAWN_MAX_RADIUS: f32 = 900.0;
 pub const SPAWN_MIN_HEIGHT: f32 = 350.0;
 /// The greatest height of a spawn, in metres.
 pub const SPAWN_MAX_HEIGHT: f32 = 550.0;
+
+// Remote planes. These times are in milliseconds, as the clocks of the machines are.
+
+/// The time between two states of one plane.
+pub const STATE_INTERVAL: f64 = STEPS_PER_STATE as f64 * STEP as f64 * 1000.0;
+/// The shortest delay at which a remote plane shows.
+pub const MIN_DELAY: f64 = 50.0;
+/// The longest delay at which a remote plane shows.
+pub const MAX_DELAY: f64 = 400.0;
+/// A margin above the measured unevenness, so that a state is usually there before it is needed.
+pub const DELAY_MARGIN: f64 = 20.0;
+/// How many times the measured unevenness the delay covers.
+pub const JITTER_COVER: f64 = 2.5;
+/// How fast the measured unevenness follows new arrivals, as a part for each arrival.
+pub const JITTER_RESPONSE: f64 = 0.1;
+/// How fast the delay may change, as a part of the time that passes. A change of 5% is too slow to see.
+pub const DELAY_PACE: f64 = 0.05;
+/// A delay that is this much too long jumps down at once. That happens after a stall of a page,
+/// and one jump forward is better than many seconds at a wrong delay.
+pub const DELAY_SNAP: f64 = 250.0;
+/// The travel times of this long give the lowest travel time. Thus a slower route, or a sender
+/// that stalled, counts after a few seconds.
+pub const TRAVEL_WINDOW: f64 = 4000.0;
+/// The longest time for which a plane without a newer state coasts on its heading.
+pub const MAX_COAST: f64 = 250.0;
+/// A timeline drops the states that are older than this, behind the newest.
+pub const STATE_HISTORY: f64 = 2000.0;
