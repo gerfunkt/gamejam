@@ -761,7 +761,7 @@ mod tests {
 				received += 1;
 			}
 		}
-		let _sink = sender.await.expect("the sender task must finish");
+		sender.await.expect("the sender task must finish");
 		assert_eq!(bus.rooms()[0].members, 1, "the member that fell behind was removed");
 		assert_eq!(slow.close_code().await, 1008, "it learns why, when it reads again");
 	}

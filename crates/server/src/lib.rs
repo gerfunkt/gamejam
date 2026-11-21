@@ -2,5 +2,6 @@
 
 pub mod bus;
 pub mod files;
+pub mod load;
 pub mod site;
 pub mod tls;
