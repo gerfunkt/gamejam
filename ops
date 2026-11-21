@@ -1,1 +1,1 @@
-{"author":{"id":"98a8d196af4b3b3a11b496a622c3857deea61c7fcfd81ca5bb36f1f18227ef6b"},"ops":[{"type":5,"timestamp":1795301034,"nonce":"1lZtFrgR1VJZTWefIKwLsnj5VwY=","added":["kind:bug","area:client","priority:p2","for:agent"],"removed":null}]}
+{"author":{"id":"98a8d196af4b3b3a11b496a622c3857deea61c7fcfd81ca5bb36f1f18227ef6b"},"ops":[{"type":3,"timestamp":1795302026,"nonce":"WtKsE0BRFzLwzV3cNnP+HgPgocw=","message":"The agent on the branch main takes this issue now.\n\nAgent: Claude Opus 5.5","files":null}]}
