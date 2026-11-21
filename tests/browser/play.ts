@@ -96,6 +96,8 @@ const scenarios: Record<string, (browser: Browser) => Promise<void>> = {
 
 		const stat = last(player);
 		const backend = /backend: (\w+)/.exec(player.adapter)?.[1] ?? "none named";
+		const health = (await player.page.locator("#health").boundingBox()) ?? { x: 999, y: 999, width: 0, height: 0 };
+		check(health.x < 40 && health.y < 40 && health.width > 200, `the state of the plane shows at the top left (${health.x.toFixed(0)}, ${health.y.toFixed(0)})`);
 		check(backend === "BrowserWebGpu", `the engine draws with WebGPU (${backend})`);
 		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
 		check(stat.screen === "Playing", `the match runs (${stat.screen})`);
@@ -367,6 +369,8 @@ Object.assign(scenarios, {
 		const context = await browser.newContext({
 			ignoreHTTPSErrors: true,
 			viewport: { width: 915, height: 412 },
+			// A phone has about three device pixels for each CSS pixel.
+			deviceScaleFactor: 3,
 			hasTouch: true,
 			isMobile: true,
 		});
@@ -385,7 +389,13 @@ Object.assign(scenarios, {
 		await page.getByRole("button", { name: "Start Match" }).tap();
 		await page.locator("#touch").waitFor({ state: "visible" });
 		check(await page.locator("#touch-fire").isVisible(), "the buttons of a phone show in a match");
-		check(await page.locator("#parts").isHidden(), "the display of a phone leaves the part bars out");
+		const health = (await page.locator("#health").boundingBox()) ?? { x: 999, y: 999, width: 0, height: 0 };
+		check(health.x < 40 && health.y < 40 && health.width > 60, `the state of the plane shows at the top left (${health.x.toFixed(0)}, ${health.y.toFixed(0)})`);
+		const slider = (await page.locator("#throttle-slide").boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+		check(health.y + health.height <= slider.y, `the state of the plane ends above the throttle slider (${(health.y + health.height).toFixed(0)} and ${slider.y.toFixed(0)})`);
+		const sky = (await page.locator("#game").boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+		check(sky.width === 915 && sky.height === 412, `the picture fills the screen of the phone (${sky.width} by ${sky.height})`);
+		check((await page.locator("#touch-tilt").getAttribute("aria-pressed")) === "true", "the tilt steers from the start");
 
 		// The stick, pulled to the right, turns the plane to the right.
 		const before = Number((await nextStat(player)).heading);
@@ -411,16 +421,12 @@ Object.assign(scenarios, {
 		check(tapped.flares === "2", `a tap on the flare button releases a flare (${tapped.flares} left)`);
 		check(tapped.throttle === "1.00", `the slider opens the throttle (${tapped.throttle})`);
 
-		// The tilt of the phone steers, from the pose at which the player turned it on.
+		// The tilt of the phone steers, from the pose in which the phone gives its first reading.
 		const lean = (beta: number, gamma: number) =>
 			page.evaluate(([b, g]) => window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { alpha: 0, beta: b, gamma: g })), [beta, gamma]);
 		// The phone lies on its left side, with its top at the left, and leans back a little.
 		await page.locator("#touch-throttle").fill("0.2");
 		await lean(0, -60);
-		await page.locator("#touch-tilt").tap();
-		// The browser answers the request for the sensor a moment after the tap.
-		await page.locator('#touch-tilt[aria-pressed="true"]').waitFor({ timeout: 3_000 }).catch(() => {});
-		check((await page.locator("#touch-tilt").getAttribute("aria-pressed")) === "true", "the tilt button turns the tilt steering on");
 		await page.waitForTimeout(300);
 		const level = [Number((await nextStat(player)).heading), Number((await nextStat(player)).heading)];
 		check(Math.abs(((level[1] - level[0] + 540) % 360) - 180) < 4, `a phone that stays in its pose flies straight (${level.join(" to ")})`);
@@ -432,6 +438,9 @@ Object.assign(scenarios, {
 		check(swing > 4 && swing < 150, `a roll of the phone to the right turns the plane to the right (${swing.toFixed(0)} degrees)`);
 		await lean(0, -60);
 		await shot(player, "phone");
+		// The tilt button turns the tilt steering off, and the stick steers alone.
+		await page.locator("#touch-tilt").tap();
+		check((await page.locator("#touch-tilt").getAttribute("aria-pressed")) === "false", "the tilt button turns the tilt steering off");
 
 		// The pause button opens the menu, and a tap resumes.
 		await page.locator("#touch-pause").tap();
@@ -466,6 +475,49 @@ Object.assign(scenarios, {
 		check(threat > 0, `the sound raised missile_incoming or enemy_lock_on_me (${threat})`);
 		const sounds = Number(last(player).sounds);
 		check(sounds > 50, `more than 50 sounds started (${sounds})`);
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+	},
+});
+
+Object.assign(scenarios, {
+	/** The entry screen and the menus, on a device that is too slow to draw the sky behind them. */
+	async menu(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+		const player = await open(context, "menu", "rest=1");
+		const { page } = player;
+		const rests = () => page.evaluate(() => document.querySelector("#game")?.classList.contains("resting") ?? false);
+
+		// The entry screen says what the game has, and offers full screen.
+		const features = await page.locator("#features li").count();
+		check(features >= 5, `the entry screen lists the features of the game (${features})`);
+		check(await page.locator("#fullscreen-menu").isVisible(), "the entry screen offers full screen");
+		await page.waitForFunction(() => document.querySelector("#game")?.classList.contains("resting"), null, { timeout: 3_000 }).catch(() => {});
+		check(await rests(), "the game draws no sky behind the entry screen of a slow device");
+		await shot(player, "entry");
+		await page.locator("#fullscreen-menu").click();
+		await page.waitForFunction(() => document.fullscreenElement !== null, null, { timeout: 3_000 }).catch(() => {});
+		check(await page.evaluate(() => document.fullscreenElement !== null), "the button of the entry screen switches to full screen");
+		check((await page.locator("#fullscreen-menu").textContent()) === "Leave Full Screen", "the button then offers the way back");
+		await page.locator("#fullscreen-menu").click();
+		await page.waitForFunction(() => document.fullscreenElement === null, null, { timeout: 3_000 }).catch(() => {});
+
+		// "How to Play" explains the game, and leads back.
+		await page.getByRole("button", { name: "How to Play" }).click();
+		await page.locator("#help").waitFor({ state: "visible" });
+		check((await page.locator("#help li:visible").count()) >= 5, "the help names the controls of this device");
+		await page.getByRole("button", { name: "Back" }).click();
+		await page.locator("#menu").waitFor({ state: "visible" });
+
+		// The lobby answers at once, and the match draws the sky again.
+		await page.getByRole("button", { name: "Fly Solo" }).click();
+		await chooseBots(page, 2, "Pilot");
+		check((await page.locator("#bots-count").textContent()) === "2", "the lobby of a slow device takes the choice of the bots");
+		await page.getByRole("button", { name: "Start Match" }).click();
+		await page.locator("#hud").waitFor({ state: "visible" });
+		await nextStat(player);
+		const stat = await nextStat(player);
+		check(!(await rests()), "the game draws the sky in a match");
+		check(stat.screen === "Playing" && stat.planes === "3", `the match runs with the player and two bots (${stat.screen}, ${stat.planes})`);
 		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
 	},
 });

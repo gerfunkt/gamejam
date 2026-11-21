@@ -17,7 +17,8 @@ body {
 	margin: 0;
 	height: 100%;
 	overflow: hidden;
-	background: var(--ground);
+	/* A sky shows before the first picture of the game, and behind the menus of a slow device. */
+	background: linear-gradient(to bottom, #16283f 0%, #4a739f 62%, #9fb7cd 100%) var(--ground);
 	color: var(--text);
 	touch-action: manipulation;
 	-webkit-tap-highlight-color: transparent;
@@ -41,6 +42,11 @@ body {
 
 #game:focus-visible {
 	outline: none;
+}
+
+/* The game draws nothing behind the menus of a slow device, so the canvas holds an old picture. */
+#game.resting {
+	opacity: 0;
 }
 
 #ui {
@@ -113,6 +119,62 @@ p {
 	padding: 0.6rem 0.75rem;
 	border-left: 0.25rem solid var(--accent);
 	background: rgb(242 194 48 / 12%);
+}
+
+/* The entry screen: what the game is, and the way into it. */
+#menu {
+	width: min(38rem, 100%);
+}
+
+#intro,
+#entry {
+	display: grid;
+	gap: 0.75rem;
+	align-content: start;
+}
+
+#features {
+	margin: 0;
+	padding-left: 1.1rem;
+	display: grid;
+	gap: 0.2rem;
+	color: var(--dim);
+	font-size: 0.9rem;
+}
+
+#features strong {
+	color: var(--text);
+}
+
+/* A phone on its side is wide and low: the two halves of the entry screen stand side by side. */
+@media (min-width: 40rem) and (max-height: 34rem) {
+	#menu {
+		width: min(60rem, 100%);
+		grid-template-columns: 1fr 1fr;
+		column-gap: 1.5rem;
+		padding: 0.9rem 1.2rem;
+	}
+
+	#menu h1 {
+		font-size: 1.8rem;
+	}
+
+	#features {
+		font-size: 0.8rem;
+	}
+}
+
+/* A browser without full screen for a page shows no button for it, and the note says what to do. */
+.no-fullscreen button.fullscreen {
+	display: none;
+}
+
+/* A game that starts from the home screen of a phone fills the screen already. */
+@media (display-mode: fullscreen), (display-mode: standalone) {
+	#fullscreen-note,
+	button.fullscreen {
+		display: none;
+	}
 }
 
 .row {
@@ -358,7 +420,7 @@ th:not(:first-child) {
 #feed {
 	position: absolute;
 	left: max(0.75rem, env(safe-area-inset-left));
-	top: max(0.75rem, env(safe-area-inset-top));
+	top: calc(max(0.75rem, env(safe-area-inset-top)) + 7.5rem);
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -399,13 +461,21 @@ th:not(:first-child) {
 	white-space: pre-line;
 }
 
+/* The state of the plane: its picture and the health of each part, at the top left. */
+#health {
+	position: absolute;
+	left: max(0.75rem, env(safe-area-inset-left));
+	top: max(0.75rem, env(safe-area-inset-top));
+	display: flex;
+	gap: 0.75rem;
+	align-items: center;
+	font-size: 0.85rem;
+}
+
 #gauges {
 	position: absolute;
 	left: max(0.75rem, env(safe-area-inset-left));
 	bottom: max(0.75rem, env(safe-area-inset-bottom));
-	display: flex;
-	gap: 1.5rem;
-	align-items: flex-end;
 	font-size: 0.85rem;
 }
 
@@ -606,7 +676,7 @@ dd {
 
 #throttle-slide {
 	left: max(0.5rem, env(safe-area-inset-left));
-	top: 22%;
+	top: max(26%, 5.75rem);
 	display: grid;
 	justify-items: center;
 	gap: 0.25rem;
@@ -666,18 +736,23 @@ dd {
 }
 
 /* With the controls of a phone, the display moves out from under the thumbs, and shows less. */
+.touch #health {
+	gap: 0.5rem;
+	font-size: 0.7rem;
+	transform: scale(0.72);
+	transform-origin: top left;
+}
+
 .touch #gauges {
 	left: 50%;
 	bottom: auto;
 	top: 2.4rem;
 	translate: -50% 0;
-	gap: 0.8rem;
 	font-size: 0.75rem;
 	transform: scale(0.85);
 	transform-origin: top center;
 }
 
-.touch #parts,
 .touch #feed {
 	display: none;
 }

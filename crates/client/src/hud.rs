@@ -263,7 +263,9 @@ fn show_lobby(game: &Game) {
 	};
 	let (host, room) = (session.is_host(), session.room());
 	page::set_text("lobby-title", if game.online { &room.title } else { "Solo Flight" });
-	let note = if !game.online {
+	let note = if game.is_starting() {
+		"The match starts…".to_owned()
+	} else if !game.online {
 		"Choose the bots, and start the match.".to_owned()
 	} else if host {
 		"You host this room. Choose the bots, and start the match when the players are here.".to_owned()
@@ -334,6 +336,7 @@ fn show_lobby(game: &Game) {
 	page::set_disabled("bots-more", !host || settings.bots >= MAX_BOTS);
 	page::set_hidden("rename", !(host && game.online));
 	page::set_hidden("start", !host);
+	page::set_disabled("start", game.is_starting());
 	debug_assert!(
 		Skill::from_name(settings.skill.name()).is_some(),
 		"the page lists each skill by its name"

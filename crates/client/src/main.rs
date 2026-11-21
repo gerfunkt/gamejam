@@ -4,9 +4,10 @@
 //! runs the session of this machine, talks to the message bus, and draws. The engine draws the
 //! sky, and the page holds the menus and the display of a match.
 //!
-//! The address of the page takes three hooks for tests: `pilot=bot` lets a bot fly the plane of
-//! the player, `stat=1` writes the numbers of the match to the console, and `backend=webgl2`
-//! loads the client for browsers without WebGPU.
+//! The address of the page takes hooks for tests: `pilot=bot` lets a bot fly the plane of the
+//! player, `stat=1` writes the numbers of the match to the console, `backend=webgl2` loads the
+//! client for browsers without WebGPU, `touch=1` shows the controls of a phone, and `rest=1`
+//! stops the picture behind the menus, as on a slow device.
 
 use bevy::prelude::*;
 

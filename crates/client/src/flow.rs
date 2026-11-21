@@ -17,6 +17,8 @@ use crate::{
 
 /// How long a control that needs a second click waits for it, in milliseconds.
 const CONFIRM_TIME: f64 = 4000.0;
+/// The frames for which the page shows that a match starts, before the match starts.
+const START_NOTICE_FRAMES: u8 = 2;
 /// The time between two lines of numbers for the browser tests, in seconds.
 const STAT_INTERVAL: f32 = 2.0;
 
@@ -73,6 +75,8 @@ pub struct Game {
 	pub lost: String,
 	/// The control that waits for its second click, and until when.
 	armed: Option<(String, f64)>,
+	/// The frames until the match starts, after the host chose to start it.
+	starting: Option<u8>,
 	/// A test hook: a bot flies the plane of the player.
 	bot_pilot: bool,
 	/// A test hook: the client writes its numbers to the console.
@@ -101,10 +105,16 @@ impl Game {
 			binding: None,
 			lost: String::new(),
 			armed: None,
+			starting: None,
 			bot_pilot: page::query("pilot").as_deref() == Some("bot"),
 			log_stats: page::query("stat").as_deref() == Some("1"),
 			stats: Stats::default(),
 		}
+	}
+
+	/// Return whether the host chose to start the match, and the match did not start yet.
+	pub fn is_starting(&self) -> bool {
+		self.starting.is_some()
 	}
 
 	/// Return how far along the current frame is between two steps of the rules, from 0 to 1.
@@ -187,15 +197,8 @@ impl Game {
 			"create" => self.enter(&Join::Create(page::field("room-title"))),
 			"bots-less" => self.choose(|settings| settings.bots = settings.bots.saturating_sub(1)),
 			"bots-more" => self.choose(|settings| settings.bots += 1),
-			"start" => {
-				// A phone plays in full screen, held sideways. A tap on the start button allows the switch.
-				if input::is_touch() {
-					page::enter_fullscreen();
-				}
-				if let Some(session) = &mut self.session {
-					session.start_match((js_sys::Math::random() * f64::from(u32::MAX)) as u32);
-				}
-			}
+			// The first frames of a match can take long, so the page says that the match starts before it does.
+			"start" => self.starting = Some(START_NOTICE_FRAMES),
 			"rename" => {
 				if let Some(session) = &mut self.session {
 					session.rename_room(&page::field("new-title"));
@@ -229,7 +232,6 @@ impl Game {
 				self.options.save();
 			}
 			"resume" => self.screen = Screen::Playing,
-			"fullscreen" => page::toggle_fullscreen(),
 			"end" => {
 				if let (true, Some(session)) = (self.confirmed("end", now), &mut self.session) {
 					session.request_end();
@@ -296,7 +298,7 @@ impl Game {
 
 pub fn plugin(app: &mut App) {
 	page::watch_menus();
-	page::keep_sideways_in_fullscreen();
+	page::watch_fullscreen();
 	input::watch();
 	page::set_field("name", &Options::load().name);
 	app.insert_resource(Game::new()).add_systems(
@@ -326,6 +328,16 @@ fn handle_page(mut game: ResMut<Game>) {
 			}
 			UiEvent::Change { id, value } => game.change(&id, &value),
 		}
+	}
+	match game.starting {
+		Some(0) => {
+			game.starting = None;
+			if let Some(session) = &mut game.session {
+				session.start_match((js_sys::Math::random() * f64::from(u32::MAX)) as u32);
+			}
+		}
+		Some(frames) => game.starting = Some(frames - 1),
+		None => {}
 	}
 	if input::take_pause() {
 		game.toggle_pause();

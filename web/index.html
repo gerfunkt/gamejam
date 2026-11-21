@@ -29,7 +29,7 @@
 				<p id="target-name"></p>
 				<dl id="target-parts"></dl>
 			</section>
-			<div id="gauges">
+			<div id="health">
 				<!-- The plane of the player from above, with the nose at the top. Each part shows its state. -->
 				<svg id="diagram" viewBox="-60 -50 120 100" width="120" height="100" role="img" aria-label="The state of the parts of your plane">
 					<rect id="shape-1" x="-56" y="-8" width="50" height="18" rx="2"/>
@@ -39,6 +39,8 @@
 					<rect id="shape-4" x="-5" y="-40" width="10" height="13" rx="2"/>
 				</svg>
 				<dl id="parts"></dl>
+			</div>
+			<div id="gauges">
 				<dl id="flight">
 					<div><dt>Speed</dt><dd id="speed"></dd></div>
 					<div><dt>Height</dt><dd id="height"></dd></div>
@@ -59,7 +61,7 @@
 				</label>
 				<div id="touch-top">
 					<button type="button" id="touch-pause" aria-label="Pause Menu">II</button>
-					<button type="button" id="touch-tilt" aria-pressed="false">TILT</button>
+					<button type="button" id="touch-tilt" aria-pressed="true">TILT</button>
 					<button type="button" id="touch-centre" hidden>CENTRE</button>
 				</div>
 				<button type="button" id="touch-fire" aria-label="Fire the Gun">GUN</button>
@@ -75,20 +77,35 @@
 			<p id="status" role="status" aria-live="polite">Loading…</p>
 
 			<section id="menu" class="screen" aria-labelledby="menu-title" hidden>
-				<h1 id="menu-title">Dogfight</h1>
-				<p class="lead">Chase a plane, and shoot it apart. Each lost part changes how a plane flies.</p>
-				<p id="fallback" class="warning" role="status" hidden>
-					This browser gives the game no WebGPU, so the game draws with WebGL2. The picture can be slower and
-					less smooth. A current Chromium browser draws it best.
-				</p>
-				<label for="name">Your Name</label>
-				<input id="name" name="name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Such as Ada…">
-				<div class="row">
-					<button type="button" data-action="solo">Fly Solo</button>
-					<button type="button" data-action="online">Find a Room</button>
-					<button type="button" data-action="help" class="quiet">How to Play</button>
-					<button type="button" data-action="settings" class="quiet">Settings</button>
-					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
+				<div id="intro">
+					<h1 id="menu-title">Dogfight</h1>
+					<p class="lead">Chase a plane, and shoot it apart. Each lost part changes how a plane flies.</p>
+					<ul id="features" aria-label="What the game has">
+						<li><strong>Planes that break:</strong> two wings, a tail, an engine, and a fuselage. Lose a wing, and you fall.</li>
+						<li><strong>Weapons:</strong> a gun, missiles that follow their target, and flares that lure a missile away.</li>
+						<li><strong>Power-ups:</strong> rings in the sky give speed, full weapons, or a repair.</li>
+						<li><strong>Better planes:</strong> your kills take you from a biplane to a fighter, and to a jet.</li>
+						<li><strong>Solo or together:</strong> fight bots alone, or up to 16 pilots in a room on this network.</li>
+						<li><strong>Any device:</strong> a mouse on a desktop, and a stick or the tilt of a phone.</li>
+					</ul>
+				</div>
+				<div id="entry">
+					<p id="fallback" class="warning" role="status" hidden>
+						This browser gives the game no WebGPU, so the game draws with WebGL2. The picture can be slower and
+						less smooth. A current Chromium browser draws it best.
+					</p>
+					<label for="name">Your Name</label>
+					<input id="name" name="name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Such as Ada…">
+					<div class="row">
+						<button type="button" data-action="solo">Fly Solo</button>
+						<button type="button" data-action="online">Find a Room</button>
+					</div>
+					<div class="row">
+						<button type="button" id="fullscreen-menu" data-action="fullscreen" class="fullscreen">Full Screen</button>
+						<button type="button" data-action="help" class="quiet">How to Play</button>
+						<button type="button" data-action="settings" class="quiet">Settings</button>
+					</div>
+					<p id="fullscreen-note" class="lead">The game plays best in full screen.</p>
 				</div>
 			</section>
 
@@ -156,6 +173,7 @@
 				</form>
 				<div class="row">
 					<button type="button" id="start" data-action="start">Start Match</button>
+					<button type="button" id="fullscreen-lobby" data-action="fullscreen" class="quiet fullscreen">Full Screen</button>
 					<button type="button" data-action="leave" class="quiet">Leave</button>
 				</div>
 			</section>
@@ -186,7 +204,7 @@
 					<button type="button" data-action="resume">Resume</button>
 					<button type="button" data-action="help" class="quiet">How to Play</button>
 					<button type="button" data-action="settings" class="quiet">Settings</button>
-					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
+					<button type="button" id="fullscreen-pause" data-action="fullscreen" class="quiet fullscreen">Full Screen</button>
 					<button type="button" id="end" data-action="end" class="quiet">End Match</button>
 					<button type="button" data-action="leave" class="quiet">Leave</button>
 				</div>

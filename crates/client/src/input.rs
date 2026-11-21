@@ -23,6 +23,8 @@ const WHEEL_THROTTLE: f32 = 0.1;
 const KEY_THROTTLE: f32 = 0.7;
 /// How far the stick or the tilt at its limit moves the aim, as the tangent of the angle.
 const STICK_AIM: f32 = 0.8;
+/// The name under which the page stores whether the tilt steers.
+const TILT_KEY: &str = "tilt";
 /// The tilt below which the phone counts as level, in radians.
 const TILT_DEAD_ZONE: f32 = 0.035;
 /// The tilt that gives the full turn, in radians.
@@ -254,6 +256,8 @@ struct State {
 	pause: bool,
 	/// Whether the tilt of the phone steers.
 	tilt: bool,
+	/// Whether the page asked the browser for the motion sensor.
+	asked: bool,
 	/// The direction of gravity in the frame of the phone, from the last sensor event.
 	gravity: Option<Vec3>,
 	/// The pose that counts as straight ahead. The next sensor reading sets it when it is empty.
@@ -334,17 +338,7 @@ pub fn watch() {
 	// The right button launches a missile, so it must not open the menu of the browser.
 	page::listen_active(&canvas, "contextmenu", |event: Event| event.prevent_default());
 
-	let coarse = page::window()
-		.match_media("(pointer: coarse)")
-		.ok()
-		.flatten()
-		.is_some_and(|query| query.matches());
-	let touch = match page::query("touch").as_deref() {
-		Some("1") => true,
-		Some("0") => false,
-		_ => coarse,
-	};
-	if touch {
+	if page::is_phone() {
 		watch_phone(&window);
 	}
 }
@@ -425,12 +419,29 @@ fn watch_phone(window: &EventTarget) {
 	page::listen(&page::element("touch-centre").into(), "click", |_: Event| {
 		STATE.with_borrow_mut(|state| state.level = None);
 	});
+	// The tilt steers from the start, unless the player turned it off at an earlier visit.
+	set_tilt(page::load(TILT_KEY).as_deref() != Some("off"));
 	// The browser of an iPhone gives the sensor only on a request that comes straight from a tap,
-	// so this listener asks, and does not wait for the next frame of the game.
+	// so these listeners ask, and do not wait for the next frame of the game. The first tap on
+	// the page asks for the tilt that is on from the start.
+	page::listen(window, "click", |_: Event| {
+		let ask = STATE.with_borrow_mut(|state| state.tilt && !std::mem::replace(&mut state.asked, true));
+		if ask {
+			ask_for_sensor(|granted| {
+				if !granted {
+					set_tilt(false);
+				}
+			});
+		}
+	});
 	page::listen(&page::element("touch-tilt").into(), "click", |_: Event| {
-		let on = STATE.with_borrow(|state| !state.tilt);
+		let on = STATE.with_borrow_mut(|state| {
+			state.asked = true;
+			!state.tilt
+		});
+		page::store(TILT_KEY, if on { "on" } else { "off" });
 		if on {
-			ask_for_sensor(|| set_tilt(true));
+			ask_for_sensor(set_tilt);
 		} else {
 			set_tilt(false);
 		}
@@ -454,24 +465,26 @@ fn set_tilt(on: bool) {
 	page::set_hidden("touch-centre", !on);
 }
 
-/// Ask the browser for the motion sensor, where it wants to be asked, and call `granted` if it agrees.
-fn ask_for_sensor(granted: impl FnOnce() + 'static) {
+/// Ask the browser for the motion sensor, where it wants to be asked, and tell `answer` whether it agrees.
+///
+/// Most browsers give the sensor without a question, and that counts as an agreement.
+fn ask_for_sensor(answer: impl FnOnce(bool) + 'static) {
 	let request = js_sys::Reflect::get(&page::window(), &"DeviceOrientationEvent".into())
 		.and_then(|sensor| js_sys::Reflect::get(&sensor, &"requestPermission".into()).map(|request| (sensor, request)));
 	let Ok((sensor, request)) = request else {
-		return granted();
+		return answer(true);
 	};
 	let Some(request) = request.dyn_ref::<js_sys::Function>() else {
-		return granted();
+		return answer(true);
 	};
-	let Ok(answer) = request.call0(&sensor) else { return };
-	let Ok(answer) = answer.dyn_into::<js_sys::Promise>() else {
-		return granted();
+	let Ok(asked) = request.call0(&sensor) else {
+		return answer(false);
+	};
+	let Ok(asked) = asked.dyn_into::<js_sys::Promise>() else {
+		return answer(true);
 	};
 	wasm_bindgen_futures::spawn_local(async move {
-		if wasm_bindgen_futures::JsFuture::from(answer).await == Ok(JsValue::from_str("granted")) {
-			granted();
-		}
+		answer(wasm_bindgen_futures::JsFuture::from(asked).await == Ok(JsValue::from_str("granted")));
 	});
 }
 
@@ -510,8 +523,15 @@ fn leave_page() {
 }
 
 /// Tell the input whether a match takes the keys now.
+///
+/// The pose in which a phone enters the flight counts as straight ahead for its tilt.
 pub fn set_in_flight(in_flight: bool) {
-	STATE.with_borrow_mut(|state| state.in_flight = in_flight);
+	STATE.with_borrow_mut(|state| {
+		if in_flight && !state.in_flight {
+			state.level = None;
+		}
+		state.in_flight = in_flight;
+	});
 }
 
 /// Return whether the page shows the controls of a phone.

@@ -38,6 +38,10 @@ const FIELD_OF_VIEW: f32 = 1.05;
 const STEEP_START: f32 = 0.12;
 /// The sine of the angle between the nose and the vertical above which the horizon of the camera is level.
 const STEEP_END: f32 = 0.35;
+/// The time of a frame above which the device draws the sky too slowly for a menu, in seconds.
+const SLOW_FRAME: f32 = 0.045;
+/// The slow frames in a row after which the picture behind the menus stops. A hitch at the start is shorter.
+const SLOW_FRAMES: u32 = 40;
 /// The colours of the power-ups, in the order of their kinds: speed, weapons, and repair.
 ///
 /// The repair is a light green that is nearly white, because a plain green is lost against the ground.
@@ -747,8 +751,46 @@ fn show_bursts(
 ///
 /// The camera looks along the nose with a level horizon, so the centre of the picture is the
 /// direction of flight, and the place under the cursor is the direction of the aim.
-fn follow(mut game: ResMut<Game>, time: Res<Time>, camera: Single<(&mut Transform, &Projection), With<Camera3d>>) {
-	let (mut transform, projection) = camera.into_inner();
+/// How the frames went while no match showed, to find a device that is too slow for the picture behind the menus.
+struct Pace {
+	/// The frames in a row that took longer than [`SLOW_FRAME`].
+	slow_frames: u32,
+	/// Whether the camera rests while no match shows. A device that was slow once stays slow.
+	rests: bool,
+}
+
+impl Default for Pace {
+	fn default() -> Self {
+		Self {
+			slow_frames: 0,
+			rests: page::query("rest").as_deref() == Some("1"),
+		}
+	}
+}
+
+fn follow(
+	mut game: ResMut<Game>,
+	time: Res<Time>,
+	camera: Single<(&mut Transform, &Projection, &mut Camera), With<Camera3d>>,
+	mut pace: Local<Pace>,
+) {
+	let (mut transform, projection, mut camera) = camera.into_inner();
+	// A menu must answer at once on every device. A device that draws the sky too slowly draws
+	// nothing while no match shows, and the page shows a still sky in its place.
+	let idle = game.session.as_ref().and_then(Session::game).is_none();
+	if idle {
+		pace.slow_frames = if time.delta_secs() > SLOW_FRAME {
+			pace.slow_frames + 1
+		} else {
+			0
+		};
+		pace.rests |= pace.slow_frames >= SLOW_FRAMES;
+	}
+	let rests = idle && pace.rests;
+	if camera.is_active == rests {
+		camera.is_active = !rests;
+	}
+	page::set_class("game", "resting", rests);
 	if let Projection::Perspective(perspective) = projection {
 		(game.lens.half_height, game.lens.aspect) = ((perspective.fov / 2.0).tan(), perspective.aspect_ratio);
 	}

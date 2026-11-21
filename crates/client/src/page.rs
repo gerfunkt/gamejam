@@ -78,9 +78,16 @@ pub fn watch_menus() {
 			.target()
 			.and_then(|target| target.dyn_into::<Element>().ok())
 			.and_then(|target| target.closest("button[data-action]").ok().flatten());
-		if let Some(button) = chosen {
-			push_action(&button);
+		let Some(button) = chosen else { return };
+		// A browser allows the switch to full screen only while it handles the click itself,
+		// so these actions do not wait for the next frame of the game.
+		match button.get_attribute("data-action").as_deref() {
+			Some("fullscreen") => return toggle_fullscreen(),
+			// A phone plays in full screen, held sideways.
+			Some("start") if is_phone() => enter_fullscreen(),
+			_ => {}
 		}
+		push_action(&button);
 	});
 	listen(&ui, "submit", |event: Event| {
 		event.prevent_default();
@@ -259,10 +266,32 @@ pub fn enter_fullscreen() {
 	}
 }
 
-/// Hold the picture sideways whenever the page is in full screen. A phone allows this only there.
-pub fn keep_sideways_in_fullscreen() {
+/// The buttons of the page that switch to full screen and back, by their ids.
+const FULLSCREEN_BUTTONS: [&str; 3] = ["fullscreen-menu", "fullscreen-lobby", "fullscreen-pause"];
+
+/// Keep the page right about full screen: what its buttons say, and which way the picture stands.
+///
+/// A browser without full screen for a page, such as the one of an iPhone, gets no button, and a
+/// note says how to get the same from the home screen. In full screen, the picture stays sideways.
+/// A phone allows that only there.
+pub fn watch_fullscreen() {
+	if !document().fullscreen_enabled() {
+		if let Some(root) = document().document_element() {
+			let _ = root.class_list().add_1("no-fullscreen");
+		}
+		set_text(
+			"fullscreen-note",
+			"This browser cannot switch a page to full screen. On an iPhone or an iPad, tap Share, then \
+			 “Add to Home Screen”, and start the game from there.",
+		);
+	}
 	listen(&document().into(), "fullscreenchange", |_: Event| {
-		if document().fullscreen_element().is_some() {
+		let full = document().fullscreen_element().is_some();
+		for id in FULLSCREEN_BUTTONS {
+			set_text(id, if full { "Leave Full Screen" } else { "Full Screen" });
+		}
+		set_hidden("fullscreen-note", full);
+		if full {
 			// A desktop refuses the lock, and that is no error.
 			if let Some(lock) = window()
 				.screen()
@@ -302,6 +331,21 @@ pub fn fetch_text(path: &'static str, deliver: impl FnOnce(Option<String>) + 'st
 		};
 		deliver(text.await);
 	});
+}
+
+/// Return whether the page runs on a phone or a tablet: a device that points with a finger.
+///
+/// The address forces the answer with `touch=1` or `touch=0`, for a test on a desktop.
+pub fn is_phone() -> bool {
+	match query("touch").as_deref() {
+		Some("1") => true,
+		Some("0") => false,
+		_ => window()
+			.match_media("(pointer: coarse)")
+			.ok()
+			.flatten()
+			.is_some_and(|query| query.matches()),
+	}
 }
 
 /// Return the value of a parameter in the address of the page.
