@@ -27,7 +27,6 @@ use crate::{
 	propeller::Blur,
 };
 
-const SKY: Color = Color::srgb(0.55, 0.70, 0.86);
 /// The place of the camera behind and above the plane, in the level frame of the plane.
 const CHASE_OFFSET: Vec3 = Vec3::new(0.0, 5.0, 21.0);
 /// How fast the camera closes the distance to its place, as a part for each second.
@@ -157,13 +156,7 @@ struct Burst {
 }
 
 pub fn plugin(app: &mut App) {
-	app.insert_resource(ClearColor(SKY))
-		.insert_resource(GlobalAmbientLight {
-			color: Color::WHITE,
-			brightness: 500.0,
-			..default()
-		})
-		.init_resource::<PlaneModels>()
+	app.init_resource::<PlaneModels>()
 		.add_systems(Startup, (make_models, make_arena, make_camera))
 		.add_systems(Update, load_plane_models.before(Drawn))
 		.add_systems(
@@ -183,7 +176,7 @@ pub fn plugin(app: &mut App) {
 		);
 }
 
-/// The systems that draw the sky and place the camera. The display of the page runs after them.
+/// The systems that draw the match and place the camera. The display of the page runs after them.
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Drawn;
 
@@ -343,14 +336,6 @@ fn make_arena(
 			..default()
 		})),
 	));
-	commands.spawn((
-		DirectionalLight {
-			illuminance: 9000.0,
-			shadow_maps_enabled: false,
-			..default()
-		},
-		Transform::from_xyz(400.0, 900.0, 300.0).looking_at(Vec3::ZERO, Vec3::Y),
-	));
 
 	// Red and white posts mark the edge of the arena, where a plane turns back by itself.
 	let post = meshes.add(Cuboid::new(8.0, 160.0, 8.0));
@@ -375,14 +360,6 @@ fn make_camera(mut commands: Commands) {
 			far: 9000.0,
 			..default()
 		}),
-		DistanceFog {
-			color: SKY,
-			falloff: FogFalloff::Linear {
-				start: 2000.0,
-				end: 6500.0,
-			},
-			..default()
-		},
 		Transform::from_xyz(0.0, 400.0, 900.0).looking_at(Vec3::ZERO, Vec3::Y),
 	));
 }

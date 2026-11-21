@@ -6,8 +6,8 @@
 //!
 //! The address of the page takes hooks for tests: `pilot=bot` lets a bot fly the plane of the
 //! player, `stat=1` writes the numbers of the match to the console, `backend=webgl2` loads the
-//! client for browsers without WebGPU, `touch=1` shows the controls of a phone, and `rest=1`
-//! stops the picture behind the menus, as on a slow device.
+//! client for browsers without WebGPU, `touch=1` shows the controls of a phone, `rest=1` stops
+//! the picture behind the menus, as on a slow device, and `clouds=0` leaves the clouds out of the sky.
 
 use bevy::prelude::*;
 
@@ -18,6 +18,8 @@ mod input;
 mod net;
 mod page;
 mod propeller;
+mod puff;
+mod sky;
 mod view;
 
 fn main() {
@@ -49,6 +51,8 @@ fn main() {
 			flow::plugin,
 			view::plugin,
 			propeller::plugin,
+			sky::plugin,
+			puff::plugin,
 			hud::plugin,
 			audio::plugin,
 		))
