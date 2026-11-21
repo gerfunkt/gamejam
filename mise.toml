@@ -1,4 +1,23 @@
 [tools]
+"aqua:WebAssembly/binaryen" = "latest"
 "aqua:git-bug/git-bug" = "latest"
+"cargo:wasm-bindgen-cli" = "0.2.130"
+mbx = "latest"
 node = "lts"
 "npm:@moonshot-ai/kimi-code" = "latest"
+rust = "1.100.0"
+
+[tasks.build]
+run = "cargo xtask build"
+
+[tasks."build:release"]
+run = "cargo xtask build --release"
+
+[tasks.serve]
+run = "cargo xtask serve"
+
+[tasks."serve:release"]
+run = "cargo xtask serve --release"
+
+[tasks.test]
+run = "cargo test --workspace"

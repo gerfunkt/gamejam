@@ -1,0 +1,8 @@
+target/
+.server/
+node_modules/
+web/app.js
+web/app_bg.wasm
+web/app_bg.wasm.d.ts
+web/app.d.ts
+web/package.json

@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "scripts": {
+    "play": "node play.ts",
+    "online": "node online.ts",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "playwright": "latest",
+    "typescript": "latest"
+  }
+}

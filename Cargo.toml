@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/sim", "crates/client", "crates/server", "crates/xtask"]
+
+[profile.dev]
+opt-level = 1
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+debug = false

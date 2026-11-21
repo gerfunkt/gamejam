@@ -49,8 +49,8 @@ Each requirement has a standing:
 | L3 | A player names itself. | Owner | Proven in part: letters with accents do not show correctly |
 | L4 | A player starts its own lobby. | Owner | Proven |
 | L5 | Other players find that lobby. | Owner | Proven |
-| L6 | The host manages its lobby: the bots, the name, who stays, and when a match starts and ends. | Owner | Proven in part: renaming is not yet shown in a browser |
-| L7 | When the host leaves, the lobby continues with a new host. | Proposed | Proven in part: not yet shown during a match |
+| L6 | The host manages its lobby: the bots, the name, who stays, and when a match starts and ends. | Owner | Proven |
+| L7 | When the host leaves, the lobby continues with a new host. | Proposed | Proven |
 
 ## The network
 
@@ -63,7 +63,7 @@ Each requirement has a standing:
 | N5 | The own plane and the own hits have no network delay. | Proposed | Proven |
 | N6 | Every machine agrees on the shared events of a match. | Proposed | Proven |
 | N7 | The server stays simple and knows nothing about the game. | Proposed | Proven. A server that decides the whole game was disqualified as too costly for a jam. |
-| N8 | One lobby holds up to 16 players, and several lobbies run at once. | Proposed | Proven in part: under generated load, and not with 16 real browsers |
+| N8 | One lobby holds up to 16 players, and several lobbies run at once. | Proposed | Proven: 16 browser sockets in a room with the 17th refused (`4002`), and under generated load |
 | N9 | The test and serve ports are 5201 to 5299. | Owner | Proven |
 
 ## Engineering
@@ -117,10 +117,9 @@ These points have no decision or no proof yet.
 1. A playtest with people (P7, P9).
 2. A test on real phones (C5). The picture is also blurred there.
 3. A test of the smooth motion on the owner's VPN (N4).
-4. The lobby cases that no browser has shown: renaming, a full lobby, and a host that leaves during a match (L6, L7).
-5. Names with accents (L3).
-6. The show pieces of P6: replay, spectators, a graph of the delay, and one GPU simulation.
-7. Sound and hit effects.
-8. A battle royale rule set (note 17), as a stretch goal.
+4. Names with accents (L3).
+5. The show pieces of P6: replay, spectators, a graph of the delay, and one GPU simulation.
+6. Sound and hit effects.
+7. A battle royale rule set (note 17), as a stretch goal.
 
 Decided on 2026-11-21: the game needs WebGPU; camera input is out; the demo is hosted locally, so wired against wireless is moot.
