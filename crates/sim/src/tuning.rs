@@ -98,3 +98,37 @@ pub const WING_HEALTH: f32 = 45.0;
 pub const TAIL_HEALTH: f32 = 40.0;
 /// The health of the engine.
 pub const ENGINE_HEALTH: f32 = 50.0;
+
+// The gun.
+
+/// The time between two bullets of one gun, in seconds.
+pub const FIRE_INTERVAL: f32 = 0.1;
+/// The speed of a bullet ahead of the plane that fires it, in m/s.
+pub const BULLET_SPEED: f32 = 550.0;
+/// How long a bullet flies, in seconds.
+pub const BULLET_LIFE: f32 = 1.3;
+/// The health that one bullet takes.
+pub const BULLET_DAMAGE: f32 = 9.0;
+/// The widest angle between a bullet and the nose, in radians.
+pub const BULLET_SPREAD: f32 = 0.004;
+/// The distance of the muzzle ahead of the centre of the plane, in metres.
+pub const MUZZLE: f32 = 4.5;
+
+// A match.
+
+/// The number of steps between two states that a machine sends for each of its planes.
+pub const STEPS_PER_STATE: u64 = 2;
+/// The time between the end of a plane and its respawn, in seconds.
+pub const RESPAWN_SECONDS: f32 = 3.0;
+/// How long a plane is protected from damage after its spawn, in seconds.
+pub const SPAWN_PROTECTION: f32 = 5.0;
+/// How long after its last hit an attacker gets the kill for a crash of its target, in seconds.
+pub const KILL_CREDIT_SECONDS: f32 = 10.0;
+/// The nearest distance of a spawn from the centre, in metres.
+pub const SPAWN_MIN_RADIUS: f32 = 500.0;
+/// The farthest distance of a spawn from the centre, in metres.
+pub const SPAWN_MAX_RADIUS: f32 = 900.0;
+/// The lowest height of a spawn, in metres.
+pub const SPAWN_MIN_HEIGHT: f32 = 350.0;
+/// The greatest height of a spawn, in metres.
+pub const SPAWN_MAX_HEIGHT: f32 = 550.0;

@@ -1,9 +1,10 @@
 use glam::{Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 use crate::{steer::steer_toward, tuning};
 
 /// A part of a plane that damage can break.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Part {
 	/// The body. A plane without it is destroyed.
 	Fuselage,
@@ -106,6 +107,7 @@ pub struct Plane {
 	rates: Vec3,
 	sink: f32,
 	boost: f32,
+	boosting: bool,
 	protection: f32,
 }
 
@@ -121,7 +123,20 @@ impl Plane {
 			rates: Vec3::ZERO,
 			sink: 0.0,
 			boost: tuning::BOOST_SECONDS,
+			boosting: false,
 			protection: 0.0,
+		}
+	}
+
+	/// Return a plane in the middle of a flight, with the given speed and the health of each part.
+	///
+	/// A machine that takes a plane over from another machine continues it with this.
+	#[must_use]
+	pub fn restored(position: Vec3, orientation: Quat, speed: f32, health: [f32; Part::ALL.len()]) -> Self {
+		Self {
+			speed,
+			health,
+			..Self::new(position, orientation)
 		}
 	}
 
@@ -165,6 +180,12 @@ impl Plane {
 	#[must_use]
 	pub fn boost(&self) -> f32 {
 		self.boost / tuning::BOOST_SECONDS
+	}
+
+	/// Return whether the plane spends boost now.
+	#[must_use]
+	pub fn is_boosting(&self) -> bool {
+		self.boosting
 	}
 
 	/// Protect the plane from all damage for `seconds`.
@@ -284,6 +305,7 @@ impl Plane {
 	fn accelerate(&mut self, controls: &Controls, dt: f32) {
 		let engine = !self.is_broken(Part::Engine);
 		let boosting = controls.boost && engine && self.boost > 0.0;
+		self.boosting = boosting;
 		if boosting {
 			self.boost = (self.boost - dt).max(0.0);
 		} else if !controls.boost {

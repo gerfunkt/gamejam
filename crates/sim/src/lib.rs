@@ -6,12 +6,20 @@
 //! The units are metres, seconds, and radians. The Y axis points up. A plane flies toward its
 //! local -Z axis, with +X to its right and +Y above it, as in Bevy.
 
+mod bot;
 mod clock;
+mod game;
+mod gun;
 mod plane;
+mod rng;
 pub mod room;
 mod steer;
 pub mod tuning;
+pub mod wire;
 
+pub use bot::Skill;
 pub use clock::FixedSteps;
+pub use game::{Event, Match};
+pub use gun::{Bullet, hit_part};
 pub use plane::{Controls, Part, Plane};
 pub use steer::{Steering, aim_direction, level_frame, steer_toward};
