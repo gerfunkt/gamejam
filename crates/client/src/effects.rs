@@ -1,5 +1,7 @@
 //! The effects of the fight, built from soft puffs of fire and smoke: the burst of a missile, the
-//! end of a plane, the fire and the trail of a missile, the flares, and the smoke of a damaged plane.
+//! end of a plane, the fire and the trail of a missile, the flares, the smoke of a damaged plane,
+//! and the flame and the trail of a plane that boosts. While the plane of the player boosts, thin
+//! streaks rush past the camera.
 //!
 //! The effects read the match and never change it.
 
@@ -44,6 +46,20 @@ const FLAME_SIZE: f32 = 5.0;
 const FLAME_BEHIND: f32 = 2.2;
 /// The size of the glow of a flare, in metres.
 const FLARE_SIZE: f32 = 9.0;
+/// The place of the flame of a boost, behind the tail, in the frame of the plane, in metres.
+const EXHAUST: Vec3 = Vec3::new(0.0, 0.2, 4.4);
+/// The size of the flame of a boost, in metres.
+const EXHAUST_SIZE: f32 = 7.0;
+/// The number of speed streaks around the camera while the player boosts.
+const STREAKS: usize = 36;
+/// How far ahead of the camera a streak starts: from, to, in metres.
+const STREAK_AHEAD: (f32, f32) = (40.0, 140.0);
+/// How far from the line of flight a streak passes: from, to, in metres.
+const STREAK_ASIDE: (f32, f32) = (3.0, 14.0);
+/// The length of a streak, as the distance that the plane flies in this time, in seconds.
+const STREAK_TIME: f32 = 0.07;
+/// The thickness of a streak, in metres.
+const STREAK_WIDTH: f32 = 0.05;
 
 /// The kinds of puff, each with its own life, size, and colours.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -60,16 +76,19 @@ enum Kind {
 	Engine,
 	/// The thick black smoke of a plane that falls after it lost a wing.
 	Wing,
+	/// The dense, short trail of a plane that boosts: hot at first, then white.
+	Boost,
 }
 
 impl Kind {
-	const ALL: [Kind; 6] = [
+	const ALL: [Kind; 7] = [
 		Kind::Flash,
 		Kind::Blast,
 		Kind::Missile,
 		Kind::Flare,
 		Kind::Engine,
 		Kind::Wing,
+		Kind::Boost,
 	];
 
 	/// Return the life of a trail puff in seconds, its size at its start and at its end in metres,
@@ -84,6 +103,7 @@ impl Kind {
 			Kind::Flare => (1.2, 2.0, 7.0, 3.0),
 			Kind::Engine => (2.4, 3.0, 13.0, 6.0),
 			Kind::Wing => (3.2, 5.0, 20.0, 4.0),
+			Kind::Boost => (0.7, 1.6, 4.5, 1.5),
 			Kind::Flash | Kind::Blast => unreachable!("only a missile, a flare, and a damaged plane lay a trail"),
 		}
 	}
@@ -98,6 +118,7 @@ impl Kind {
 			Kind::Flare => (0.12, 0.8, 0.45),
 			Kind::Engine => (0.0, 0.22, 0.5),
 			Kind::Wing => (0.04, 0.07, 0.75),
+			Kind::Boost => (0.2, 0.85, 0.65),
 		};
 		let hot = LinearRgba::rgb(8.0, 4.5, 1.4);
 		let embers = LinearRgba::rgb(0.9, 0.28, 0.05);
@@ -128,12 +149,24 @@ impl Looks {
 	}
 }
 
-/// The materials of the glows at the tail of a missile and of a flare.
+/// The materials of the glows at the tail of a missile, of a flare, and of a plane that boosts.
 #[derive(Resource)]
 struct Glows {
 	flame: Handle<StandardMaterial>,
 	flare: Handle<StandardMaterial>,
+	exhaust: Handle<StandardMaterial>,
 }
+
+/// The mesh and the material of the speed streaks.
+#[derive(Resource)]
+struct StreakLook {
+	line: Handle<Mesh>,
+	glow: Handle<StandardMaterial>,
+}
+
+/// A speed streak, which stays at its place in the world while the camera rushes past it.
+#[derive(Component)]
+struct Streak;
 
 /// One puff of fire or smoke.
 #[derive(Component)]
@@ -170,14 +203,19 @@ pub fn plugin(app: &mut App) {
 		.add_systems(Startup, make_looks)
 		.add_systems(
 			Update,
-			(age_puffs, start_blasts, lay_trails, show_glows)
+			(age_puffs, start_blasts, lay_trails, show_glows, show_streaks)
 				.chain()
 				.after(Flow)
 				.in_set(Drawn),
 		);
 }
 
-fn make_looks(mut commands: Commands, assets: Res<PuffAssets>, mut materials: ResMut<Assets<StandardMaterial>>) {
+fn make_looks(
+	mut commands: Commands,
+	assets: Res<PuffAssets>,
+	mut meshes: ResMut<Assets<Mesh>>,
+	mut materials: ResMut<Assets<StandardMaterial>>,
+) {
 	let looks = Kind::ALL.map(|kind| {
 		let steps = std::array::from_fn(|fade| {
 			let thin = (fade + 1) as f32 / FADES as f32;
@@ -216,6 +254,16 @@ fn make_looks(mut commands: Commands, assets: Res<PuffAssets>, mut materials: Re
 	commands.insert_resource(Glows {
 		flame: materials.add(glow(LinearRgba::rgb(6.0, 3.0, 0.8))),
 		flare: materials.add(glow(LinearRgba::rgb(9.0, 8.0, 6.0))),
+		exhaust: materials.add(glow(LinearRgba::rgb(7.0, 5.5, 3.5))),
+	});
+	commands.insert_resource(StreakLook {
+		line: meshes.add(Cuboid::new(STREAK_WIDTH, STREAK_WIDTH, 1.0)),
+		glow: materials.add(StandardMaterial {
+			base_color: LinearRgba::rgb(1.6, 1.6, 1.7).into(),
+			unlit: true,
+			alpha_mode: AlphaMode::Add,
+			..default()
+		}),
 	});
 }
 
@@ -398,6 +446,9 @@ fn lay_trails(
 		*number += 1;
 	}
 	for (id, state) in running.planes().into_iter().filter(|(_, state)| state.alive) {
+		if state.boosting {
+			sources.push((Source(Kind::Boost, id, 0), state.position + state.orientation * EXHAUST));
+		}
 		if state.is_broken(Part::Engine) {
 			sources.push((
 				Source(Kind::Engine, id, 0),
@@ -458,7 +509,7 @@ fn lay_trails(
 	trails.0 = laid;
 }
 
-/// Show a glow at the tail of each missile, and on each flare.
+/// Show a glow at the tail of each missile, on each flare, and behind each plane that boosts.
 fn show_glows(
 	mut commands: Commands,
 	game: Res<Game>,
@@ -469,6 +520,17 @@ fn show_glows(
 	let running = game.session.as_ref().and_then(Session::game);
 	let missiles = running.map(sim::Match::missiles).unwrap_or_default();
 	let flares = running.map(sim::Match::flares).unwrap_or_default();
+	let planes = running.map(sim::Match::planes).unwrap_or_default();
+	let boosting = planes
+		.iter()
+		.filter(|(_, state)| state.alive && state.boosting)
+		.map(|(_, state)| {
+			(
+				state.position + state.orientation * EXHAUST,
+				EXHAUST_SIZE,
+				&glows.exhaust,
+			)
+		});
 	let wanted = missiles
 		.iter()
 		.map(|missile| {
@@ -478,7 +540,8 @@ fn show_glows(
 				&glows.flame,
 			)
 		})
-		.chain(flares.iter().map(|flare| (flare.position, FLARE_SIZE, &glows.flare)));
+		.chain(flares.iter().map(|flare| (flare.position, FLARE_SIZE, &glows.flare)))
+		.chain(boosting);
 	let mut pool = shown.iter_mut();
 	for (place, size, look) in wanted {
 		let transform = Transform::from_translation(place).with_scale(Vec3::splat(size));
@@ -504,5 +567,66 @@ fn show_glows(
 	}
 	for (_, _, mut visibility) in pool {
 		*visibility = Visibility::Hidden;
+	}
+}
+
+/// Show thin streaks that rush past the camera while the plane of the player boosts.
+fn show_streaks(
+	mut commands: Commands,
+	game: Res<Game>,
+	look: Res<StreakLook>,
+	camera: Single<&Transform, (With<Camera3d>, Without<Streak>)>,
+	mut streaks: Query<(&mut Transform, &mut Visibility), With<Streak>>,
+	mut counter: Local<u32>,
+) {
+	let running = game.session.as_ref().and_then(Session::game);
+	let me = running.and_then(|running| {
+		running
+			.planes()
+			.into_iter()
+			.find_map(|(id, state)| (id == running.me()).then_some(state))
+	});
+	let Some(plane) = me.filter(|plane| plane.alive && plane.boosting) else {
+		for (_, mut visibility) in &mut streaks {
+			*visibility = Visibility::Hidden;
+		}
+		return;
+	};
+	let (eye, ahead) = (camera.translation, plane.forward());
+	let length = plane.speed * STREAK_TIME;
+	let place_ahead = |counter: &mut u32| {
+		let aside = ahead.any_orthonormal_vector();
+		let around = Quat::from_axis_angle(ahead, random(counter) * std::f32::consts::TAU) * aside;
+		let reach = STREAK_AHEAD.0 + (STREAK_AHEAD.1 - STREAK_AHEAD.0) * random(counter);
+		let off = STREAK_ASIDE.0 + (STREAK_ASIDE.1 - STREAK_ASIDE.0) * random(counter);
+		eye + ahead * reach + around * off
+	};
+	let mut count = 0;
+	for (mut transform, mut visibility) in &mut streaks {
+		count += 1;
+		// A streak that the camera passed, or that a turn left far aside, starts again ahead.
+		let from_eye = transform.translation - eye;
+		if *visibility == Visibility::Hidden
+			|| from_eye.dot(ahead) < -length
+			|| from_eye.length() > STREAK_AHEAD.1 * 1.2
+		{
+			transform.translation = place_ahead(&mut counter);
+			*visibility = Visibility::Inherited;
+		}
+		*transform = Transform::from_translation(transform.translation)
+			.looking_to(ahead, Vec3::Y)
+			.with_scale(Vec3::new(1.0, 1.0, length));
+	}
+	for _ in count..STREAKS {
+		let place = place_ahead(&mut counter);
+		commands.spawn((
+			Streak,
+			Mesh3d(look.line.clone()),
+			MeshMaterial3d(look.glow.clone()),
+			Transform::from_translation(place)
+				.looking_to(ahead, Vec3::Y)
+				.with_scale(Vec3::new(1.0, 1.0, length)),
+			NotShadowCaster,
+		));
 	}
 }
