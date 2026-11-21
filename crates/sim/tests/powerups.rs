@@ -9,6 +9,8 @@ use sim::{
 	wire::{Message, PlaneId, Settings},
 };
 
+/// Planes fight from about this height up to the ceiling, in metres.
+const FIGHT_FLOOR: f32 = 400.0;
 const FIRST: u32 = 1;
 const SECOND: u32 = 2;
 const NO_BOTS: Settings = Settings {
@@ -73,11 +75,11 @@ fn the_arena_holds_eight_power_ups_of_three_kinds_in_the_sky() {
 			"{x} {z} lies too far out"
 		);
 		assert!(
-			y >= arena::clear_height(x, z) + 100.0,
-			"{y} m is too near to the terrain"
+			y >= arena::clear_height(x, z) + 150.0,
+			"{y} m is too near to the terrain: it does not float in open air"
 		);
 		assert!(
-			(tuning::SPAWN_MIN_HEIGHT..=tuning::CEILING).contains(&y),
+			(FIGHT_FLOOR..=tuning::CEILING).contains(&y),
 			"{y} m is outside the heights of the fight"
 		);
 	}

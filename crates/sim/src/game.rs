@@ -438,8 +438,9 @@ impl Match {
 	fn new_plane(&mut self) -> Plane {
 		let angle = self.rng.range(0.0, TAU);
 		let radius = self.rng.range(tuning::SPAWN_MIN_RADIUS, tuning::SPAWN_MAX_RADIUS);
-		let height = self.rng.range(tuning::SPAWN_MIN_HEIGHT, tuning::SPAWN_MAX_HEIGHT);
-		let position = Vec3::new(radius * angle.sin(), height, radius * angle.cos());
+		let (x, z) = (radius * angle.sin(), radius * angle.cos());
+		let clearance = self.rng.range(tuning::SPAWN_MIN_CLEARANCE, tuning::SPAWN_MAX_CLEARANCE);
+		let position = Vec3::new(x, arena::clear_height(x, z) + clearance, z);
 		let mut plane = Plane::new(position, Quat::from_rotation_y(angle));
 		plane.protect(tuning::SPAWN_PROTECTION);
 		plane

@@ -181,7 +181,8 @@ pub const FLARE_FALL: f32 = 9.8;
 // Power-ups.
 
 /// The places of the power-ups in the sky, as the X, Y, and Z of each place in metres. Each lies
-/// inside half of the arena, and far above the terrain, at a height where planes fight.
+/// inside half of the arena, at a height where planes fight, and in open air: a test checks that each
+/// is far above the terrain around it.
 pub const POWERUP_PLACES: [[f32; 3]; 8] = [
 	[900.0, 450.0, 0.0],
 	[320.0, 560.0, 320.0],
@@ -246,10 +247,11 @@ pub const KILL_CREDIT_SECONDS: f32 = 10.0;
 pub const SPAWN_MIN_RADIUS: f32 = 500.0;
 /// The farthest distance of a spawn from the centre, in metres.
 pub const SPAWN_MAX_RADIUS: f32 = 900.0;
-/// The lowest height of a spawn, in metres. It is above all terrain.
-pub const SPAWN_MIN_HEIGHT: f32 = 400.0;
-/// The greatest height of a spawn, in metres.
-pub const SPAWN_MAX_HEIGHT: f32 = 600.0;
+/// The least height of a spawn above `arena::clear_height` at its place, in metres. A plane that
+/// flies level toward the centre then clears the ground on its way.
+pub const SPAWN_MIN_CLEARANCE: f32 = 350.0;
+/// The greatest height of a spawn above `arena::clear_height` at its place, in metres.
+pub const SPAWN_MAX_CLEARANCE: f32 = 550.0;
 
 // Remote planes. These times are in milliseconds, as the clocks of the machines are.
 

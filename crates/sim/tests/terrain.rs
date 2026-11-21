@@ -1,7 +1,26 @@
 //! The terrain of the arena: the baked ground, and every height that must clear it.
 
 use glam::Vec3;
-use sim::{arena, tuning};
+use sim::{Match, Skill, arena, tuning, wire::Settings};
+
+const NO_BOTS: Settings = Settings {
+	bots: 0,
+	skill: Skill::Rookie,
+};
+
+/// The position of the plane that a new match gives to the player of `seed`.
+fn spawn(seed: u32) -> Vec3 {
+	let game = Match::new(1, seed, NO_BOTS);
+	game.plane(game.me()).expect("the machine flies its player").position
+}
+
+/// The highest ground on the straight line from `from` to `to`, in metres.
+fn highest_ground_between(from: Vec3, to: Vec3) -> f32 {
+	(0..=200)
+		.map(|step| from.lerp(to, step as f32 / 200.0))
+		.map(|point| arena::ground_height(point.x, point.z))
+		.fold(f32::MIN, f32::max)
+}
 
 #[test]
 fn the_baked_terrain_starts_at_height_zero_and_rises_no_more_than_the_limit() {
@@ -100,4 +119,61 @@ fn the_clear_height_sees_a_mountain_beside_the_place_that_the_ground_below_does_
 		found,
 		"no place has a slope of 50 m beside it, so the radius is of no use"
 	);
+}
+
+#[test]
+fn the_air_between_the_highest_ground_and_the_ceiling_holds_the_heights_of_a_fight() {
+	let highest_spawn = tuning::TERRAIN_MAX_RISE + tuning::SPAWN_MAX_CLEARANCE;
+	assert!(
+		highest_spawn + tuning::BOT_SAFE_HEIGHT < tuning::CEILING,
+		"a spawn at {highest_spawn} m is too near to the ceiling"
+	);
+}
+
+#[test]
+fn a_plane_spawns_high_above_the_ground_around_it_for_any_seed() {
+	for seed in 0..3000 {
+		let position = spawn(seed);
+		let clear = arena::clear_height(position.x, position.z);
+		assert!(
+			position.y >= clear + tuning::SPAWN_MIN_CLEARANCE - 0.01
+				&& position.y <= clear + tuning::SPAWN_MAX_CLEARANCE + 0.01,
+			"seed {seed} spawns at {} m over ground that clears at {clear} m",
+			position.y
+		);
+		assert!(
+			position.y < tuning::CEILING,
+			"seed {seed} spawns at {} m, above the ceiling",
+			position.y
+		);
+	}
+}
+
+#[test]
+fn a_plane_that_flies_level_from_its_spawn_to_the_centre_clears_the_ground_on_its_way() {
+	for seed in 0..3000 {
+		let position = spawn(seed);
+		let ground = highest_ground_between(position, Vec3::new(0.0, position.y, 0.0));
+		assert!(
+			position.y > ground + tuning::BOT_SAFE_HEIGHT,
+			"seed {seed} spawns at {} m, and the ground on its way reaches {ground} m",
+			position.y
+		);
+	}
+}
+
+#[test]
+fn a_spawn_is_never_inside_the_ground_for_places_on_the_whole_spawn_ring() {
+	for angle in 0..720 {
+		for radius in [tuning::SPAWN_MIN_RADIUS, 700.0, tuning::SPAWN_MAX_RADIUS] {
+			let angle = (angle as f32 * 0.5).to_radians();
+			let (x, z) = (radius * angle.sin(), radius * angle.cos());
+			let lowest = arena::clear_height(x, z) + tuning::SPAWN_MIN_CLEARANCE;
+			let ground = highest_ground_between(Vec3::new(x, lowest, z), Vec3::new(0.0, lowest, 0.0));
+			assert!(
+				lowest > ground + tuning::BOT_SAFE_HEIGHT,
+				"a lowest spawn at {x} {z} is {lowest} m, and the ground on its way reaches {ground} m"
+			);
+		}
+	}
 }
