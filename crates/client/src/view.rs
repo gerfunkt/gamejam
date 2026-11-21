@@ -63,12 +63,15 @@ struct ModelEntry {
 	kills: u16,
 }
 
+/// The mesh of each part of a plane model, in the order of [`Part::ALL`], and its texture.
+type LoadedModel = ([Handle<Mesh>; Part::ALL.len()], Option<Handle<Image>>);
+
 /// A plane model of the build. The build cut it into one mesh for each part of the rules.
 struct PlaneModel {
 	kills: u16,
 	file: Handle<Gltf>,
-	/// The mesh of each part, and the texture, once the file is loaded.
-	parts: Option<([Handle<Mesh>; Part::ALL.len()], Option<Handle<Image>>)>,
+	/// The meshes and the texture, once the file is loaded.
+	parts: Option<LoadedModel>,
 }
 
 /// The plane models, in the order of their kills. Without a model, a plane shows as boxes.
