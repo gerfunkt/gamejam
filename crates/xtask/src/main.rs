@@ -13,6 +13,7 @@ use anyhow::{Context, Result, bail, ensure};
 mod image;
 mod mesh;
 mod models;
+mod publish;
 mod record;
 mod terrain;
 
@@ -25,6 +26,12 @@ cargo xtask serve [--dev] [--webgpu] [-- <server options>]
 
 cargo xtask build [--dev] [--webgpu]
     Build the clients for the browser into web/, as serve does. It converts the plane models first.
+
+cargo xtask publish [--server <address>]
+    Build both clients in release, and push them to the branch pages-build, which holds only the built
+    game and is replaced whole each time. The workflow \"Publish the game\" deploys that branch to GitHub
+    Pages. The published page offers the game server of the local network for the multiplayer game:
+    https://192.168.0.87:5201 unless --server names another HTTPS address.
 
 cargo xtask models [--preview]
     Turn the plane models of assets/planes/ into the GLB files of web/assets/planes/.
@@ -63,6 +70,15 @@ fn main() -> Result<()> {
 	let (task, flags) = own
 		.split_first()
 		.map_or(("", &[][..]), |(task, flags)| (task.as_str(), flags));
+	if task == "publish" {
+		let address = match flags {
+			[] => publish::DEFAULT_SERVER,
+			[flag, address] if flag == "--server" => address.as_str(),
+			_ => bail!("unknown option\n\n{USAGE}"),
+		};
+		build(true, true)?;
+		return publish::run(&root()?, address);
+	}
 	let known: &[&str] = if task == "models" || task == "terrain" {
 		&["--preview"]
 	} else {

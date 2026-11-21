@@ -1,20 +1,16 @@
-# Publish the game to GitHub Pages with one click: Actions, "Publish the game", "Run workflow".
+# Publish the game to GitHub Pages. The game builds on a developer's machine, and this workflow
+# only deploys it:
 #
-# Pages serves files only, so it cannot run the game server. The published game plays solo at once.
-# A large link on the published page sends players to the game server of the local network for the
-# multiplayer game: the address in the input `server`. Players can also enter a server under
-# "Game Server" in the room list, or open the game with `?server=<host>:<port>`.
+# 1. `cargo xtask publish` builds both clients and pushes them to the branch `pages-build`, which
+#    holds only the built game and is replaced whole each time. The page names the game server of
+#    the local network for the multiplayer game.
+# 2. Actions, "Publish the game", "Run workflow" deploys that branch to Pages.
 #
 # Before the first run, switch Pages on once: Settings, Pages, Source "GitHub Actions".
 name: Publish the game
 
 on:
   workflow_dispatch:
-    inputs:
-      server:
-        description: The game server of the local network, which the published page offers for multiplayer
-        required: true
-        default: https://192.168.0.87:5201
 
 permissions:
   contents: read
@@ -27,43 +23,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    env:
-      # mise downloads wasm-bindgen from GitHub, and the token keeps it under the rate limit.
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
-        with:
-          # The build needs the compiler and wasm-bindgen from mise.toml, and none of the other tools.
-          install_args: rust github:wasm-bindgen/wasm-bindgen
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Build both clients
-        run: mise exec -- cargo xtask build
-      - name: Name the game server in the published page
-        env:
-          SERVER: ${{ inputs.server }}
-        run: |
-          # Only a plain HTTPS address goes into the page.
-          if ! [[ "$SERVER" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]]; then
-            echo "::error::The server must be an address such as https://192.168.0.87:5201"
-            exit 1
-          fi
-          sed -i "s|<meta name=\"game-server\" content=\"\">|<meta name=\"game-server\" content=\"$SERVER\">|" web/index.html
-          grep -qF "<meta name=\"game-server\" content=\"$SERVER\">" web/index.html
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: web
-
   deploy:
-    needs: build
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: pages-build
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: .
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

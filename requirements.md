@@ -56,7 +56,7 @@ Each requirement has a standing:
 | D4 | The entry screen gives a short rundown of the features of the game. | Owner | Proven: a browser test counts the features |
 | D5 | The page shows the progress of the load. When the game cannot start, the page says why and what to do. No device stays on the loading screen without a message, and the menus answer at once on a slow device. | Owner's report | Proven in part: browser tests load the WebGL2 client and play, and a phone or a slow device shows a still sky behind the menus. The owner has not confirmed it on the devices that were stuck. |
 | D6 | The radar tells the kinds of things apart at a glance. Enemies are red. | Owner | Proven in part: enemies are red arrows, power-ups are rings, and missiles are yellow diamonds. No person has judged it. |
-| D7 | The copy of the game on GitHub Pages opens with a large link to the game server of the local network, `https://192.168.0.87:5201` by default, for the full multiplayer game. The page of the game server itself shows no such link. A workflow publishes the copy with one click. | Owner | Proven in part: a browser test of a published copy and of the server page shows both. The workflow has not run on GitHub yet. |
+| D7 | The copy of the game on GitHub Pages opens with a large link to the game server of the local network, `https://192.168.0.87:5201` by default, for the full multiplayer game. The page of the game server itself shows no such link. The game builds on a developer's machine, `cargo xtask publish` pushes it to a throwaway branch, and a workflow deploys that branch with one click. | Owner | Proven in part: a browser test of a published copy and of the server page shows both. |
 
 ## The picture and the sound
 
