@@ -8,6 +8,7 @@
 
 mod clock;
 mod plane;
+pub mod room;
 mod steer;
 pub mod tuning;
 
