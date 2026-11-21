@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292356,"nonce":"AwfRcdhBsrBSIEI5rcjnIB5S808=","message":"Implemented flight kinematics, mouse/bot steer_toward, gun ray hits, five breakable parts, and respawn/protection in crates/sim.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292357,"nonce":"vHlHC0X2qNcZjTML7u5VT52Kz+k=","status":2}]}
