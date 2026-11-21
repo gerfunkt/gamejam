@@ -1,6 +1,6 @@
 //! The picture of the sky: the ground, the planes, the tracers, the missiles, and the camera.
 //!
-//! The view reads the match and never changes it. Everything is a grey box.
+//! The view reads the match and never changes it.
 
 use std::{
 	cell::RefCell,
@@ -26,10 +26,6 @@ use crate::{
 };
 
 const SKY: Color = Color::srgb(0.55, 0.70, 0.86);
-/// The side of one square of the ground, in metres.
-const TILE: f32 = 100.0;
-/// How far the ground reaches from the centre, in metres.
-const GROUND_EXTENT: f32 = 3200.0;
 /// The place of the camera behind and above the plane, in the level frame of the plane.
 const CHASE_OFFSET: Vec3 = Vec3::new(0.0, 5.0, 21.0);
 /// How fast the camera closes the distance to its place, as a part for each second.
@@ -255,53 +251,56 @@ fn load_plane_models(
 	}
 }
 
-/// Return the ground of the rules as squares in two tones, which show speed and height.
+/// Return the ground of the rules, with the picture of the terrain laid over it.
 ///
-/// Each square is flat, with the heights of the rules at its corners. Outside the arena it is brown.
+/// The mesh has one corner for each point of the height grid, so a plane touches the ground where the picture shows it.
 fn ground() -> Mesh {
-	let (mut positions, mut normals, mut colours, mut indices) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
-	let count = (2.0 * GROUND_EXTENT / TILE) as i32;
-	let corner = |x: f32, z: f32| Vec3::new(x, arena::ground_height(x, z), z);
-	for row in 0..count {
-		for column in 0..count {
-			let (x, z) = (column as f32 * TILE - GROUND_EXTENT, row as f32 * TILE - GROUND_EXTENT);
-			let inside = Vec2::new(x + TILE / 2.0, z + TILE / 2.0).length() < tuning::ARENA_RADIUS;
-			let colour = match (inside, (row + column) % 2 == 0) {
-				(true, true) => Color::srgb(0.36, 0.46, 0.27),
-				(true, false) => Color::srgb(0.27, 0.37, 0.21),
-				(false, true) => Color::srgb(0.42, 0.37, 0.27),
-				(false, false) => Color::srgb(0.34, 0.30, 0.22),
-			};
-			let corners = [
-				corner(x, z),
-				corner(x, z + TILE),
-				corner(x + TILE, z + TILE),
-				corner(x + TILE, z),
-			];
-			let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]).normalize();
-			let first = positions.len() as u32;
-			positions.extend(corners.map(|corner| corner.to_array()));
-			normals.extend([normal.to_array(); 4]);
-			colours.extend([colour.to_linear().to_f32_array(); 4]);
-			indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+	let grid = arena::ground();
+	let side = grid.side();
+	let cells = (side - 1) as f32;
+	let spacing = tuning::TERRAIN_SIDE / cells;
+	let place = |index: usize| (index as f32 / cells - 0.5) * tuning::TERRAIN_SIDE;
+	let (mut positions, mut normals, mut picture) = (Vec::new(), Vec::new(), Vec::new());
+	for row in 0..side {
+		for column in 0..side {
+			positions.push([place(column), grid.point(column, row), place(row)]);
+			// The slope between the two neighbours of the point on each axis. A point of the edge is its own neighbour.
+			let (west, east) = (column.saturating_sub(1), (column + 1).min(side - 1));
+			let (north, south) = (row.saturating_sub(1), (row + 1).min(side - 1));
+			let across = (grid.point(east, row) - grid.point(west, row)) / (east - west) as f32;
+			let down = (grid.point(column, south) - grid.point(column, north)) / (south - north) as f32;
+			normals.push(Vec3::new(-across, spacing, -down).normalize().to_array());
+			// The top row of the picture is the north edge of the terrain.
+			picture.push([column as f32 / cells, row as f32 / cells]);
+		}
+	}
+	let mut indices = Vec::new();
+	for row in 0..side - 1 {
+		for column in 0..side - 1 {
+			let corner = (row * side + column) as u32;
+			let (east, south) = (corner + 1, corner + side as u32);
+			indices.extend([corner, south, south + 1, corner, south + 1, east]);
 		}
 	}
 	Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
 		.with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
 		.with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-		.with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+		.with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, picture)
 		.with_inserted_indices(Indices::U32(indices))
 }
 
 fn make_arena(
 	mut commands: Commands,
+	assets: Res<AssetServer>,
 	mut meshes: ResMut<Assets<Mesh>>,
 	mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
 	commands.spawn((
 		Mesh3d(meshes.add(ground())),
 		MeshMaterial3d(materials.add(StandardMaterial {
+			base_color_texture: Some(assets.load("terrain/map.png")),
 			perceptual_roughness: 1.0,
+			reflectance: 0.1,
 			..default()
 		})),
 	));
@@ -313,24 +312,6 @@ fn make_arena(
 		},
 		Transform::from_xyz(400.0, 900.0, 300.0).looking_at(Vec3::ZERO, Vec3::Y),
 	));
-
-	// The blocks of the rules. A plane that touches one is destroyed, so the picture shows them exactly.
-	let block = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-	let stones = [
-		Color::srgb(0.62, 0.60, 0.56),
-		Color::srgb(0.55, 0.38, 0.30),
-		Color::srgb(0.78, 0.74, 0.62),
-	];
-	let stones = stones.map(|colour| materials.add(colour));
-	for (index, feature) in arena::features().iter().enumerate() {
-		commands.spawn((
-			Mesh3d(block.clone()),
-			MeshMaterial3d(stones[index % stones.len()].clone()),
-			Transform::from_translation(feature.centre)
-				.with_scale(feature.half_extents * 2.0)
-				.with_rotation(Quat::from_rotation_y(feature.turn)),
-		));
-	}
 
 	// Red and white posts mark the edge of the arena, where a plane turns back by itself.
 	let post = meshes.add(Cuboid::new(8.0, 160.0, 8.0));
