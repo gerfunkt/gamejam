@@ -523,6 +523,35 @@ Object.assign(scenarios, {
 	},
 });
 
+Object.assign(scenarios, {
+	/** The sky, the clouds, and the effects: a solo match on each client, with pictures early and late. */
+	async sky(browser: Browser) {
+		for (const [client, hooks, adapter] of [
+			["webgpu", "pilot=bot", "BrowserWebGpu"],
+			["webgl2", "pilot=bot&backend=webgl2", "Gl"],
+		]) {
+			const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+			const player = await open(context, `sky-${client}`, hooks);
+			await player.page.getByRole("button", { name: "Fly Solo" }).click();
+			await chooseBots(player.page, 3, "Veteran");
+			await player.page.getByRole("button", { name: "Start Match" }).click();
+			await player.page.locator("#hud").waitFor({ state: "visible" });
+			await player.page.waitForTimeout(8_000);
+			await shot(player, `sky-${client}-1`);
+			await player.page.waitForTimeout(22_000);
+			await shot(player, `sky-${client}-2`);
+
+			const stat = last(player);
+			const backend = /backend: (\w+)/.exec(player.adapter)?.[1] ?? "none named";
+			check(backend === adapter, `the ${client} client draws with ${adapter} (${backend})`);
+			check(player.errors.length === 0, `the ${client} client reports no error (${player.errors.length})`);
+			check(Number(stat.fps) >= 50, `the ${client} client draws at least 50 frames a second (${stat.fps})`);
+			check(Number(stat.kills) > 0, `planes are destroyed in 30 s on the ${client} client (${stat.kills})`);
+			await context.close();
+		}
+	},
+});
+
 const run = scenarios[scenario];
 if (!run) {
 	console.log(`Unknown scenario "${scenario}". The scenarios are: ${Object.keys(scenarios).join(", ")}.`);
