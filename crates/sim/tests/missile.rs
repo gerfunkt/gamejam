@@ -278,10 +278,8 @@ fn a_burst_damages_near_parts_more_than_far_parts() {
 		"a burst at a wing must break it"
 	);
 	let fuselage = of(Part::Fuselage).expect("the fuselage is in reach");
-	assert!(
-		fuselage < tuning::BURST_DAMAGE && fuselage >= tuning::BURST_EDGE_DAMAGE,
-		"the fuselage takes {fuselage}"
-	);
+	let reach = tuning::BURST_EDGE_DAMAGE..tuning::BURST_DAMAGE;
+	assert!(reach.contains(&fuselage), "the fuselage takes {fuselage}");
 	let far_wing = of(Part::RightWing).expect("the far wing is in reach");
 	assert!(
 		far_wing < fuselage && far_wing < tuning::WING_HEALTH,
