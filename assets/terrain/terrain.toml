@@ -1,0 +1,37 @@
+# The terrain of the arena. `cargo xtask terrain` bakes it into two small files:
+# crates/sim/src/arena/heights.bin for the rules, and web/assets/terrain/map.png for the client.
+# Git keeps both baked files, because the raw files are too large for git.
+#
+# The square that the terrain covers, and the most that it may rise, are rules of the game. They are
+# `TERRAIN_SIDE` and `TERRAIN_MAX_RISE` in crates/sim/src/tuning.rs, and not numbers of this file.
+#
+# The raw files come from the archive. Extract it, and put its files into assets/terrain/raw/ with
+# these names (git ignores that directory):
+#   Meshy_AI_flight_terrain_map_3d_1121195048_image-to-3d-texture.fbx -> raw/model.fbx
+#   Meshy_AI_flight_terrain_map_3d_1121195048_image-to-3d-texture.png -> raw/model.png
+# The archive holds a normal map, a roughness map, and a metallic map too. The bake does not read them.
+# Paths are relative to this file. Write "not recorded" in a record field that nobody knows. Do not guess.
+
+[terrain]
+key = "flight-terrain-map"
+name = "Flight terrain map"
+archive = "flight_terrain_map_3d.zip"
+archive_bytes = 153327932
+archive_sha256 = "dccc473f6130aa3a8f92b4bb5bb36b95856e557ec336ef442501e031076c4ed1"
+model = "raw/model.fbx"
+texture = "raw/model.png"
+# `north` is the axis of the model that points to -Z of the world, and `up` is the axis that points up.
+# The model is level as it is.
+north = "-Z"
+up = "+Y"
+# The grid of the rules has 257 by 257 points, 25 m apart. It takes 132 kB.
+points = 257
+# The picture of the client has 1024 by 1024 pixels, which are 6.25 m wide.
+picture = 1024
+
+[terrain.record]
+author = "the owner of the project (the file flight_terrain_map_3d.zip)"
+service = "Meshy AI"
+date = "2026-11-21"
+prompt = "not recorded"
+licence = "not recorded"

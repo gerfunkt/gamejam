@@ -83,6 +83,9 @@ pub const NO_TAIL_CONTROL: f32 = 0.3;
 pub const PLANE_RADIUS: f32 = 2.0;
 /// The side of the square that the terrain covers, with its centre at the origin, in metres.
 pub const TERRAIN_SIDE: f32 = 6400.0;
+/// The most that the terrain rises above its lowest point, in metres. The bake squeezes a taller
+/// model to this. Planes fight from about 400 m up to the ceiling, so the air above the terrain stays open.
+pub const TERRAIN_MAX_RISE: f32 = 500.0;
 /// The height of the highest hill, in metres.
 pub const HILL_HEIGHT: f32 = 140.0;
 /// The number of blocks that stand on the ground.

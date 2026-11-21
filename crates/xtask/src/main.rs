@@ -10,9 +10,11 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
+mod image;
 mod mesh;
 mod models;
 mod record;
+mod terrain;
 
 const USAGE: &str = "\
 cargo xtask serve [--dev] [--webgpu] [-- <server options>]
@@ -26,7 +28,13 @@ cargo xtask build [--dev] [--webgpu]
 
 cargo xtask models [--preview]
     Turn the plane models of assets/planes/ into the GLB files of web/assets/planes/.
-    --preview also draws each model into assets/planes/<key>-preview.png, from above and from the side.";
+    --preview also draws each model into assets/planes/<key>-preview.png, from above and from the side.
+
+cargo xtask terrain [--preview]
+    Bake the raw terrain model of assets/terrain/raw/ into the height grid of the rules
+    (crates/sim/src/arena/heights.bin) and the colour picture of the client (web/assets/terrain/map.png).
+    Git keeps both files. --preview also draws assets/terrain/map-preview.png: the heights and the colours
+    side by side, with the circle of the arena.";
 
 /// A build of the client for one graphics interface of the browser.
 #[derive(Clone, Copy)]
@@ -55,7 +63,7 @@ fn main() -> Result<()> {
 	let (task, flags) = own
 		.split_first()
 		.map_or(("", &[][..]), |(task, flags)| (task.as_str(), flags));
-	let known: &[&str] = if task == "models" {
+	let known: &[&str] = if task == "models" || task == "terrain" {
 		&["--preview"]
 	} else {
 		&["--dev", "--webgpu"]
@@ -69,6 +77,7 @@ fn main() -> Result<()> {
 	match task {
 		"build" => build(release, all),
 		"models" => models::run(&root()?, flags.iter().any(|flag| flag == "--preview")),
+		"terrain" => terrain::run(&root()?, flags.iter().any(|flag| flag == "--preview")),
 		"serve" => {
 			build(release, all)?;
 			// The server always builds in release, because it carries the bus for every player.

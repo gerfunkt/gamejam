@@ -9,7 +9,7 @@ use anyhow::Result;
 use glam::{Vec2, Vec3};
 use sim::Part;
 
-use crate::mesh::geometry::Triangle;
+use crate::{image::Image, mesh::geometry::Triangle};
 
 /// The pixels for each metre.
 const SCALE: f32 = 60.0;
@@ -160,17 +160,17 @@ fn draw(parts: &[(Part, Vec<Triangle>)], view: View) -> Canvas {
 /// Returns an error if the PNG encoder fails.
 pub fn render(parts: &[(Part, Vec<Triangle>)]) -> Result<Vec<u8>> {
 	let height = TOP_HEIGHT + GAP + SIDE_HEIGHT;
-	let mut pixels = Vec::with_capacity(WIDTH * height * 3);
-	let mut push = |canvas: &Canvas| pixels.extend(canvas.pixels.iter().flatten());
+	let mut pixels = Vec::with_capacity(WIDTH * height);
+	let mut push = |canvas: &Canvas| pixels.extend_from_slice(&canvas.pixels);
 	push(&draw(parts, View::Top));
 	push(&Canvas::new(GAP));
 	push(&draw(parts, View::Side));
-	let mut file = Vec::new();
-	let mut encoder = png::Encoder::new(&mut file, u32::try_from(WIDTH)?, u32::try_from(height)?);
-	encoder.set_color(png::ColorType::Rgb);
-	encoder.set_depth(png::BitDepth::Eight);
-	encoder.write_header()?.write_image_data(&pixels)?;
-	Ok(file)
+	Image {
+		width: WIDTH,
+		height,
+		pixels,
+	}
+	.encode()
 }
 
 #[cfg(test)]
