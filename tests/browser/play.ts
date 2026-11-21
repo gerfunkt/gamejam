@@ -357,6 +357,7 @@ Object.assign(scenarios, {
 		check(after.host === "true", `the guest hosts the room after the host left (${after.host})`);
 		check(after.planes === "3" && after.screen === "Playing", `the match runs on with one player and two bots (${after.planes}, ${after.screen})`);
 		await second.page.keyboard.press("Escape");
+		await second.page.locator("#pause").waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
 		check(await second.page.getByRole("button", { name: "End Match" }).isVisible(), "the new host can end the match");
 		check(second.errors.length === 0, `the new host reports no error (${second.errors.length})`);
 		await shot(second, "lobby-new-host");
