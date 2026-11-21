@@ -4,15 +4,22 @@
 # rustc usually lets `cc` link, and `cc` adds the start files and the library paths of the
 # system. This driver adds them itself. glibc owns the start files, and libgcc owns the unwinder.
 # rustc reads the name `ld` as a plain linker, and it puts the directory of `rust-lld` on PATH.
-here=$(dirname "$0")
-# The start files and the C library are in /usr/lib on Arch, and in /usr/lib/x86_64-linux-gnu on
-# Debian and Ubuntu, such as the machines of GitHub Actions.
+#
+# The start files, the C library, and libgcc_s.so.1 are in /usr/lib on Arch, and in
+# /usr/lib/x86_64-linux-gnu on Debian and Ubuntu, such as the machines of GitHub Actions.
 for lib in /usr/lib/x86_64-linux-gnu /usr/lib; do
 	[ -e "$lib/crti.o" ] && break
 done
 start=$lib/Scrt1.o
+# A system without a C compiler has libgcc_s.so.1 but no libgcc_s.so, so `-lgcc_s` would find
+# nothing. The driver names the library file in its place.
 for arg do
+	shift
+	case $arg in
+	-lgcc_s) set -- "$@" "$lib/libgcc_s.so.1" ;;
 	# A shared library, such as a procedural macro, has no program start.
-	[ "$arg" = "-shared" ] && start=
+	-shared) start= && set -- "$@" "$arg" ;;
+	*) set -- "$@" "$arg" ;;
+	esac
 done
-exec rust-lld -flavor gnu "$@" --dynamic-linker=/lib64/ld-linux-x86-64.so.2 $start "$lib/crti.o" -L"$lib" -L"$here/lib" "$lib/crtn.o"
+exec rust-lld -flavor gnu "$@" --dynamic-linker=/lib64/ld-linux-x86-64.so.2 $start "$lib/crti.o" -L"$lib" "$lib/crtn.o"

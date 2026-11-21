@@ -284,7 +284,7 @@ The scaled-back goal is a small number of breakable parts on each plane.
 - **Measured.** The workspace builds and passes its tests with `cc`, `gcc`, `g++`, `clang`, and `ar` replaced by programs that fail and log each call. The build started from an empty target directory, and it covered Bevy with Rapier and Avian for the browser.
 - **Measured.** No C code was compiled. The only logged calls came from the build script of `blake3`, which asks what the compiler supports and continues without one.
 - **Linking.** Rust calls `cc` to link host programs, such as build scripts and macros. `tools/ld` replaces it. It is a driver of ten lines that calls `rust-lld`, the linker inside the Rust toolchain, and adds the start files of glibc. `.cargo/config.toml` names it as the linker.
-- The driver needs two things from the system: glibc with its start files, and `libgcc_s.so.1` from the `libgcc` package. Both are part of a base Arch system. `tools/lib` holds a link to that library under the name that the linker looks for.
+- The driver needs two things from the system: glibc with its start files, and `libgcc_s.so.1` from the `libgcc` package. Both are part of a base Arch system and of Debian and Ubuntu. The driver passes the file of that library in the place of `-lgcc_s`, because a system without a C compiler has no `libgcc_s.so` for the linker to find.
 - The prebuilt tools still contain code that came from C or C++: Node, `wasm-opt`, `wasm-bindgen`, and Chromium. The project compiles none of it.
 - To repeat the check, put `tools/no-cc` first on `PATH`, set `NO_CC_LOG` to a file, and build with an empty target directory.
 - A limit: the driver holds the paths of one Linux layout. Another operating system needs its own driver.
