@@ -35,6 +35,15 @@ mod raster;
 
 /// The samples of the colour picture along each side of a pixel. Their mean is the colour of the pixel.
 const SAMPLES: usize = 2;
+/// How far beyond the edge of the model the land sinks to the lowest height of the model, in metres.
+///
+/// The model need not fill the square. The land beyond it slopes down to a plain, which the client
+/// continues to the horizon.
+const SINK_DISTANCE: f32 = 900.0;
+/// How far beyond the edge of the model its colours fade to their mean colour, in metres.
+const COLOUR_FADE: f32 = 300.0;
+/// The passes of smoothing over the land beyond the model. Each pass blends a point with its four neighbours.
+const SMOOTH_PASSES: usize = 40;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 /// The numbers of a bake.
@@ -48,6 +57,9 @@ struct Settings {
 	picture: usize,
 	/// The most that the terrain may rise above its lowest point, in metres.
 	max_rise: f32,
+	/// How far beyond the model the land sinks, and how far its colours fade, in metres.
+	sink_distance: f32,
+	colour_fade: f32,
 }
 
 /// The result of a bake.
@@ -109,26 +121,65 @@ fn lower_and_squeeze(heights: &mut [f32], max_rise: f32) -> f32 {
 /// Returns an error if the model cannot fit the square or covers no point of it.
 fn bake(triangles: &mut [Triangle], texture: &Image, settings: Settings) -> Result<Baked> {
 	let scale = fit_to_square(triangles, settings.side)?;
-	let mut heights: Vec<f32> = top_surface(triangles, Lattice::corners(settings.side, settings.points))?
+	let surface = top_surface(triangles, Lattice::corners(settings.side, settings.points))?;
+	let spacing = settings.side / (settings.points - 1) as f32;
+	let base = surface
 		.iter()
+		.filter(|hit| hit.gap == 0.0)
 		.map(|hit| hit.height)
+		.fold(f32::INFINITY, f32::min);
+	let mut heights: Vec<f32> = surface
+		.iter()
+		.map(|hit| base + (hit.height - base) * kept(hit.gap * spacing, settings.sink_distance))
 		.collect();
+	let beyond: Vec<bool> = surface.iter().map(|hit| hit.gap > 0.0).collect();
+	smooth(&mut heights, settings.points, &beyond);
 	let squeeze = lower_and_squeeze(&mut heights, settings.max_rise);
 	let grid = HeightGrid::from_heights(settings.points, &heights)?;
 
 	let samples = settings.picture * SAMPLES;
+	let sample_spacing = settings.side / samples as f32;
 	let hits = top_surface(triangles, Lattice::centres(settings.side, samples))?;
-	let pixels = (0..settings.picture)
+	// The colour of each pixel, and the mean distance of its samples to the model, in metres.
+	let (colours, gaps): (Vec<[f32; 3]>, Vec<f32>) = (0..settings.picture)
 		.flat_map(|row| (0..settings.picture).map(move |column| (column, row)))
 		.map(|(column, row)| {
-			let mut sum = [0.0_f32; 3];
+			let (mut sum, mut gap) = ([0.0_f32; 3], 0.0);
 			for (sample_row, sample_column) in (0..SAMPLES).flat_map(|r| (0..SAMPLES).map(move |c| (r, c))) {
 				let hit = hits[(row * SAMPLES + sample_row) * samples + column * SAMPLES + sample_column];
 				let colour = texture.sample(hit.uv);
 				sum.iter_mut().zip(colour).for_each(|(sum, channel)| *sum += channel);
+				gap += hit.gap * sample_spacing;
 			}
-			sum.map(|total| (total / (SAMPLES * SAMPLES) as f32).round() as u8)
+			let count = (SAMPLES * SAMPLES) as f32;
+			(sum.map(|total| total / count), gap / count)
 		})
+		.unzip();
+	let on_model: Vec<&[f32; 3]> = colours
+		.iter()
+		.zip(&gaps)
+		.filter(|(_, gap)| **gap == 0.0)
+		.map(|(colour, _)| colour)
+		.collect();
+	let mean = on_model
+		.iter()
+		.fold([0.0_f32; 3], |sum, colour| {
+			std::array::from_fn(|channel| sum[channel] + colour[channel])
+		})
+		.map(|total| total / on_model.len().max(1) as f32);
+	let beyond: Vec<bool> = gaps.iter().map(|gap| *gap > 0.0).collect();
+	let mut channels: [Vec<f32>; 3] = std::array::from_fn(|channel| {
+		colours
+			.iter()
+			.zip(&gaps)
+			.map(|(colour, gap)| mean[channel] + (colour[channel] - mean[channel]) * kept(*gap, settings.colour_fade))
+			.collect()
+	});
+	for channel in &mut channels {
+		smooth(channel, settings.picture, &beyond);
+	}
+	let pixels = (0..colours.len())
+		.map(|slot| std::array::from_fn(|channel| channels[channel][slot].round().clamp(0.0, 255.0) as u8))
 		.collect();
 	Ok(Baked {
 		grid,
@@ -140,6 +191,30 @@ fn bake(triangles: &mut [Triangle], texture: &Image, settings: Settings) -> Resu
 		scale,
 		squeeze,
 	})
+}
+
+/// Return how much of a feature of the model stays at `distance` beyond its edge: 1 at the edge, and 0 from `reach` on.
+fn kept(distance: f32, reach: f32) -> f32 {
+	let share = (distance / reach).clamp(0.0, 1.0);
+	1.0 - share * share * (3.0 - 2.0 * share)
+}
+
+/// Blend each value that `free` marks with its four neighbours, [`SMOOTH_PASSES`] times. The other values stay.
+///
+/// The values are a square of `side` by `side`, row by row.
+fn smooth(values: &mut [f32], side: usize, free: &[bool]) {
+	for _ in 0..SMOOTH_PASSES {
+		let before = values.to_vec();
+		for (slot, value) in values.iter_mut().enumerate().filter(|(slot, _)| free[*slot]) {
+			let (column, row) = (slot % side, slot / side);
+			let at = |column: usize, row: usize| before[row * side + column];
+			*value = (at(column.saturating_sub(1), row)
+				+ at((column + 1).min(side - 1), row)
+				+ at(column, row.saturating_sub(1))
+				+ at(column, (row + 1).min(side - 1)))
+				/ 4.0;
+		}
+	}
 }
 
 /// Bake the terrain of the manifest, and write the height grid and the colour picture.
@@ -181,6 +256,8 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 			points: terrain.points,
 			picture: terrain.picture,
 			max_rise: tuning::TERRAIN_MAX_RISE,
+			sink_distance: SINK_DISTANCE,
+			colour_fade: COLOUR_FADE,
 		},
 	)?;
 
@@ -229,7 +306,23 @@ mod tests {
 		points: 5,
 		picture: 4,
 		max_rise: 500.0,
+		sink_distance: 50.0,
+		colour_fade: 20.0,
 	};
+
+	/// A strip of 2 by 20 units along Z that rises from 0 at its left edge to 10 units at its right edge.
+	/// Its texture is red on the left half and green on the right half.
+	fn ramp() -> Vec<Triangle> {
+		let corner = |x: f32, z: f32| {
+			let mut corner = vertex(x, 5.0 + 5.0 * x, z);
+			corner.uv = glam::Vec2::new((x + 1.0) / 2.0, 0.5);
+			corner
+		};
+		vec![
+			[corner(-1.0, -10.0), corner(1.0, -10.0), corner(1.0, 10.0)],
+			[corner(-1.0, -10.0), corner(1.0, 10.0), corner(-1.0, 10.0)],
+		]
+	}
 
 	/// A pyramid with a base of 20 by 20 units and a height of 10 units.
 	fn pyramid() -> Vec<Triangle> {
@@ -370,6 +463,50 @@ mod tests {
 			picture.pixels[15],
 			[0, 255, 0],
 			"the last pixel of the last row is green"
+		);
+	}
+
+	#[test]
+	fn the_land_beyond_the_model_slopes_down_toward_the_lowest_height_of_the_model() {
+		let settings = Settings {
+			points: 21,
+			picture: 20,
+			..SETTINGS
+		};
+		let baked = bake(&mut ramp(), &grey(), settings).unwrap();
+		// The strip is 20 m wide, so the middle row covers columns 9 to 11 and leaves 9 columns on each side.
+		let row: Vec<f32> = (11..21).map(|column| baked.grid.point(column, 10)).collect();
+		assert!(row[0] > 90.0, "the high edge of the strip stays: {}", row[0]);
+		assert!(row[1] > 50.0, "the land next to it is still high: {}", row[1]);
+		assert!(
+			row.windows(2).all(|pair| pair[1] <= pair[0] + 1e-3),
+			"the land falls without a step back up: {row:?}"
+		);
+		// The smoothing carries some of the height of the strip to the edge, and the client continues the slope.
+		assert!(
+			row[9] < 20.0,
+			"the edge of the square is far below the strip: {}",
+			row[9]
+		);
+	}
+
+	#[test]
+	fn the_land_far_beyond_the_model_has_the_mean_colour_of_the_model() {
+		let texture = Image {
+			width: 2,
+			height: 1,
+			pixels: vec![[255, 0, 0], [0, 255, 0]],
+		};
+		let settings = Settings {
+			picture: 20,
+			..SETTINGS
+		};
+		let baked = bake(&mut ramp(), &texture, settings).unwrap();
+		// The smoothing pulls a little of the nearest edge of the model, which is green here, into the far land.
+		let edge = baked.picture.pixels[10 * 20 + 19];
+		assert!(
+			edge[0].abs_diff(128) <= 16 && edge[1].abs_diff(128) <= 16 && edge[2] == 0,
+			"about half red and half green: {edge:?}"
 		);
 	}
 

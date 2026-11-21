@@ -65,11 +65,14 @@ pub struct Hit {
 	pub height: f32,
 	/// The texture coordinates of the surface.
 	pub uv: Vec2,
+	/// The distance to the nearest point that a triangle covers, in steps of the lattice. It is 0 at a covered point.
+	pub gap: f32,
 }
 
 const NONE: Hit = Hit {
 	height: f32::NEG_INFINITY,
 	uv: Vec2::ZERO,
+	gap: 0.0,
 };
 
 /// Return the highest surface of `triangles` over each point of `lattice`, row by row with the lowest Z first.
@@ -116,6 +119,7 @@ pub fn top_surface(triangles: &[Triangle], lattice: Lattice) -> Result<Vec<Hit>>
 					*slot = Hit {
 						height,
 						uv: Vec2::new(mix(|vertex| vertex.uv.x), mix(|vertex| vertex.uv.y)),
+						gap: 0.0,
 					};
 				}
 			}
@@ -126,6 +130,8 @@ pub fn top_surface(triangles: &[Triangle], lattice: Lattice) -> Result<Vec<Hit>>
 }
 
 /// Give each point without a hit the hit of the nearest point with one, by spreading the hits one step at a time.
+///
+/// Each step adds 1 to the gap of the hit, so the gap counts the steps to the covered point.
 fn fill(hits: &mut [Hit], count: usize) -> Result<()> {
 	let mut queue: VecDeque<usize> = (0..hits.len())
 		.filter(|&slot| hits[slot].height > f32::NEG_INFINITY)
@@ -144,7 +150,10 @@ fn fill(hits: &mut [Hit], count: usize) -> Result<()> {
 		];
 		for neighbour in neighbours.into_iter().flatten() {
 			if hits[neighbour].height == f32::NEG_INFINITY {
-				hits[neighbour] = hits[slot];
+				hits[neighbour] = Hit {
+					gap: hits[slot].gap + 1.0,
+					..hits[slot]
+				};
 				queue.push_back(neighbour);
 			}
 		}
@@ -269,6 +278,11 @@ mod tests {
 			"the far edge takes the height of the nearest covered point in its row"
 		);
 		assert!(hits.iter().all(|hit| hit.height == 3.0), "nothing stays empty");
+		assert_eq!(
+			(hits[0].gap, hits[4].gap),
+			(0.0, 3.0),
+			"the gap counts the steps to the covered point, which is the second of the row"
+		);
 	}
 
 	#[test]
