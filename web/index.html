@@ -4,6 +4,10 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 		<meta name="theme-color" content="#0b0f14">
+		<!-- A phone that starts the game from its home screen shows it in full screen, held sideways. -->
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<link rel="manifest" href="manifest.json">
 		<title>Dogfight</title>
 		<!-- The game has no icon yet. An empty one stops the request of the browser for a file. -->
 		<link rel="icon" href="data:,">
@@ -82,9 +86,33 @@
 				<div class="row">
 					<button type="button" data-action="solo">Fly Solo</button>
 					<button type="button" data-action="online">Find a Room</button>
+					<button type="button" data-action="help" class="quiet">How to Play</button>
 					<button type="button" data-action="settings" class="quiet">Settings</button>
 					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
 				</div>
+			</section>
+
+			<section id="help" class="screen" aria-labelledby="help-title" hidden>
+				<h2 id="help-title">How to Play</h2>
+				<p>Shoot the other planes down, and stay out of the ground. A plane that loses a wing falls. A lost tail or a dead engine makes a plane hard to fly.</p>
+				<ul class="desktop-only">
+					<li><strong>Steer:</strong> move the mouse. The plane flies toward the cursor.</li>
+					<li><strong>Gun:</strong> the left mouse button, or Space.</li>
+					<li><strong>Missile:</strong> hold your nose on a plane until the box on it turns red. Then press the right mouse button, or F.</li>
+					<li><strong>Flare:</strong> press E when a missile comes, or turn hard across its path.</li>
+					<li><strong>Speed:</strong> the mouse wheel, or W and S, set the throttle. Shift gives a boost.</li>
+					<li><strong>Menu:</strong> Escape.</li>
+				</ul>
+				<ul class="touch-only">
+					<li><strong>Steer:</strong> the stick under your left thumb. TILT lets you steer by tilting the phone.</li>
+					<li><strong>Gun:</strong> hold GUN.</li>
+					<li><strong>Missile:</strong> hold your nose on a plane until the box on it turns red. Then tap MSL.</li>
+					<li><strong>Flare:</strong> tap FLARE when a missile comes, or turn hard across its path.</li>
+					<li><strong>Speed:</strong> the THR slider sets the throttle. Hold BOOST for a boost.</li>
+					<li><strong>Menu:</strong> tap II.</li>
+				</ul>
+				<p>Fly through a glowing ring to get speed, full weapons, or a repair. More kills give you a newer plane.</p>
+				<div class="row"><button type="button" data-action="back">Back</button></div>
 			</section>
 
 			<section id="rooms" class="screen" aria-labelledby="rooms-title" hidden>
@@ -156,6 +184,7 @@
 				<p id="pause-note"></p>
 				<div class="row">
 					<button type="button" data-action="resume">Resume</button>
+					<button type="button" data-action="help" class="quiet">How to Play</button>
 					<button type="button" data-action="settings" class="quiet">Settings</button>
 					<button type="button" data-action="fullscreen" class="quiet">Full Screen</button>
 					<button type="button" id="end" data-action="end" class="quiet">End Match</button>
@@ -181,19 +210,47 @@
 
 		<!-- A page can start WebAssembly only from a script. This script also chooses the build of the
 			client: the one for WebGPU, or the one for WebGL2 where the browser gives no WebGPU adapter.
+			It shows how much of the game arrived, and it says why when the game cannot start.
 			Everything after the start is Rust. -->
 		<script type="module">
-			const forced = new URLSearchParams(location.search).get("backend");
-			const adapter = forced !== "webgl2" && navigator.gpu ? await navigator.gpu.requestAdapter().catch(() => null) : null;
+			const status = document.getElementById("status");
+			const forced = new URLSearchParams(location.search).get("backend") ?? sessionStorage.getItem("backend");
+			// Some browsers offer WebGPU and then never answer. Three seconds are enough for an adapter.
+			const adapter =
+				forced !== "webgl2" && navigator.gpu
+					? await Promise.race([navigator.gpu.requestAdapter().catch(() => null), new Promise((done) => setTimeout(done, 3000, null))])
+					: null;
 			const backend = adapter ? "webgpu" : "webgl2";
 			document.documentElement.dataset.backend = backend;
 			try {
 				const client = await import(`./${backend}/app.js`);
+				const answer = await fetch(`./${backend}/app_bg.wasm`);
+				if (!answer.ok) throw new Error(`the server has no ${backend} build`);
+				// The game is large. The page counts the bytes as they arrive, and compiles them on the way.
+				const megabytes = (bytes) => Math.round(bytes / 1e6);
+				const size = Number(answer.headers.get("Content-Length"));
+				let arrived = 0;
+				const counted = answer.body.pipeThrough(
+					new TransformStream({
+						transform(chunk, controller) {
+							arrived += chunk.length;
+							status.textContent = `Loading the game… ${megabytes(arrived)}${size ? ` of ${megabytes(size)}` : ""} MB`;
+							controller.enqueue(chunk);
+						},
+					}),
+				);
+				await client.default({ module_or_path: new Response(counted, { headers: { "Content-Type": "application/wasm" } }) });
+			} catch (error) {
 				// The engine leaves its start function through an exception, which is not an error.
-				client.default().catch(() => {});
-			} catch {
-				document.getElementById("status").textContent =
-					`The ${backend} build of the game is missing. Run “cargo xtask build --all”, and load the page again.`;
+				if (!String(error).includes("Using exceptions for control flow")) {
+					if (backend === "webgpu" && !forced) {
+						// WebGPU failed on this device: the page tries the WebGL2 client once.
+						sessionStorage.setItem("backend", "webgl2");
+						location.reload();
+					} else {
+						status.textContent = `The game cannot start in this browser (${String(error).slice(0, 160)}). Load the page again, or use a current Chrome. On the host, “cargo xtask build” makes both builds of the game.`;
+					}
+				}
 			}
 		</script>
 	</body>

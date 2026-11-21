@@ -337,17 +337,44 @@ pub fn log(line: &str) {
 
 /// Show a panic on the page, and its details in the console.
 ///
-/// The engine panics when the browser gives it no graphics at all, before it can say so itself.
+/// The engine panics when the browser gives it no graphics, before it can say so itself. If
+/// that happens to the WebGPU client before its first frame, the page loads the WebGL2 client
+/// in its place, once.
 pub fn report_panics() {
 	std::panic::set_hook(Box::new(|info| {
 		console_error_panic_hook::hook(info);
-		if let Some(status) = web_sys::window()
-			.and_then(|window| window.document())
+		let Some(window) = web_sys::window() else { return };
+		let session = window.session_storage().ok().flatten();
+		let tried = session
+			.as_ref()
+			.and_then(|session| session.get_item("backend").ok().flatten())
+			.is_some();
+		if backend() == "webgpu"
+			&& !tried
+			&& !STARTED.get()
+			&& let Some(session) = session
+		{
+			let _ = session.set_item("backend", "webgl2");
+			let _ = window.location().reload();
+			return;
+		}
+		if let Some(status) = window
+			.document()
 			.and_then(|document| document.get_element_by_id("status"))
 		{
 			status.set_text_content(Some(
-				"The game stopped. This browser may give it no graphics: open the page in a current Chromium browser, over HTTPS. The console of the browser holds the details.",
+				"The game stopped. This browser may give it no graphics: load the page again, or open it in a current Chrome browser, over HTTPS. The console of the browser holds the details.",
 			));
 		}
 	}));
+}
+
+thread_local! {
+	/// Whether the client drew its first frame.
+	static STARTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Note that the client drew a frame, so a later panic is no failure of the start.
+pub fn mark_started() {
+	STARTED.set(true);
 }

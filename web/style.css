@@ -715,3 +715,16 @@ dd {
 .touch [data-action="defaults"] {
 	display: none;
 }
+
+/* The help names the controls of the device in the hand of the player. */
+#help ul {
+	margin: 0;
+	padding-left: 1.2rem;
+	display: grid;
+	gap: 0.3rem;
+}
+
+.touch .desktop-only,
+html:not(.touch) .touch-only {
+	display: none;
+}

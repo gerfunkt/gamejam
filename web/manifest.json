@@ -1,0 +1,10 @@
+{
+	"name": "Dogfight",
+	"short_name": "Dogfight",
+	"description": "A plane shooter for one local network.",
+	"start_url": "./",
+	"display": "fullscreen",
+	"orientation": "landscape",
+	"background_color": "#0b0f14",
+	"theme_color": "#0b0f14"
+}

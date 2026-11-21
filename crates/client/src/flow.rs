@@ -27,6 +27,7 @@ pub enum Screen {
 	Rooms,
 	Lobby,
 	Settings,
+	Help,
 	Playing,
 	Paused,
 	Results,
@@ -220,6 +221,7 @@ impl Game {
 			}
 			"menu" => self.leave(),
 			"settings" => (self.back, self.screen) = (self.screen, Screen::Settings),
+			"help" => (self.back, self.screen) = (self.screen, Screen::Help),
 			"back" => (self.binding, self.screen) = (None, self.back),
 			"bind" => self.binding = Bind::from_index(value),
 			"defaults" => {

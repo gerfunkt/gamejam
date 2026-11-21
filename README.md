@@ -22,11 +22,13 @@ cargo xtask serve
 
 The command builds the game, starts the server, and prints one address for each network of the machine, such as `https://192.168.1.20:5201`. Open an address in a current Chromium browser, and accept the warning about the certificate once. Other machines on the network open the same address.
 
-- `cargo xtask serve --release` builds the faster client, and also the client for browsers without WebGPU. Use it for a playtest.
+- The command builds the client for WebGPU and the client for WebGL2. A phone or an older browser without WebGPU gets the second one, with a notice that the picture can be slower.
+- `cargo xtask serve --dev --webgpu` builds only the first client, without the long optimisation. Use it for a short loop of change and test.
 - `cargo xtask serve -- --port 5210` passes options to the server.
+- The server prints "failed the TLS handshake" for each browser that has not yet accepted the certificate warning. That is normal.
 - Ctrl+C stops the server. Run the command again after a change of the code.
 
-The plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. "Settings" in the menu lists the keys, and changes them.
+On a desktop, the plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. On a phone, held sideways, a stick or the tilt of the phone steers, and buttons do the rest. "How to Play" in the menu explains the controls, and "Settings" changes the keys.
 
 ## Develop
 
@@ -34,7 +36,7 @@ The plane turns toward the mouse cursor. The left button fires the gun, the righ
 |---|---|
 | `mise run test` | Runs the tests of the rules and of the server. They need no browser. |
 | `mise run check` | Checks the format and the lints of all crates. |
-| `cargo xtask build` | Converts the plane models, and builds the WebGPU client into `web/`. With `--all`, it also builds the WebGL2 client. |
+| `cargo xtask build` | Converts the plane models, and builds both clients into `web/`. `--dev --webgpu` builds the WebGPU client alone and fast. |
 | `cargo xtask models --preview` | Converts the plane models of `assets/planes/planes.toml` alone, and draws a picture of each one beside its files. |
 | `node play.ts solo https://localhost:5201/` | Plays a solo match in headless Chromium, in `tests/browser/` after `pnpm install`, while the server runs. |
 

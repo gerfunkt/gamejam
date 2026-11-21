@@ -114,12 +114,14 @@ pub fn plugin(app: &mut App) {
 }
 
 fn show_screens(game: Res<Game>) {
+	page::mark_started();
 	page::set_text("status", "");
 	let screens = [
 		("menu", Screen::Menu),
 		("rooms", Screen::Rooms),
 		("lobby", Screen::Lobby),
 		("settings", Screen::Settings),
+		("help", Screen::Help),
 		("pause", Screen::Paused),
 		("results", Screen::Results),
 		("lost", Screen::Lost),
@@ -174,7 +176,7 @@ fn show_screens(game: Res<Game>) {
 			page::set_rows("result-rows", "tr", &rows);
 		}
 		Screen::Lost => page::set_text("lost-note", &game.lost),
-		Screen::Playing => {}
+		Screen::Playing | Screen::Help => {}
 	}
 }
 

@@ -13,14 +13,14 @@ use anyhow::{Context, Result, bail, ensure};
 mod models;
 
 const USAGE: &str = "\
-cargo xtask serve [--release] [-- <server options>]
+cargo xtask serve [--dev] [--webgpu] [-- <server options>]
     Build the game, and serve it over HTTPS with the message bus. Open the printed address.
-    Without --release, only the WebGPU client is built, for a short loop of change and test.
-    With --release, both clients are built, for a playtest or the demo.
+    The task builds the client for WebGPU and the client for WebGL2, which phones and older
+    browsers need. --webgpu builds only the first, for a short loop of change and test.
+    --dev builds without the long optimisation, and keeps the function names for crash reports.
 
-cargo xtask build [--release] [--all]
-    Build the client for the browser into web/. --all also builds the WebGL2 client, which
-    --release always does. It converts the plane models first.
+cargo xtask build [--dev] [--webgpu]
+    Build the clients for the browser into web/, as serve does. It converts the plane models first.
 
 cargo xtask models [--preview]
     Turn the plane models of assets/planes/ into the GLB files of web/assets/planes/.
@@ -56,14 +56,14 @@ fn main() -> Result<()> {
 	let known: &[&str] = if task == "models" {
 		&["--preview"]
 	} else {
-		&["--release", "--all"]
+		&["--dev", "--webgpu"]
 	};
 	ensure!(
 		flags.iter().all(|flag| known.contains(&flag.as_str())),
 		"unknown option\n\n{USAGE}"
 	);
-	let release = flags.iter().any(|flag| flag == "--release");
-	let all = release || flags.iter().any(|flag| flag == "--all");
+	let release = !flags.iter().any(|flag| flag == "--dev");
+	let all = !flags.iter().any(|flag| flag == "--webgpu");
 	match task {
 		"build" => build(release, all),
 		"models" => models::run(&root()?, flags.iter().any(|flag| flag == "--preview")),

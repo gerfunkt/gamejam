@@ -16,16 +16,12 @@ description = "Build the game, and serve it with the message bus over HTTPS. Ope
 run = "cargo xtask serve"
 
 [tasks.build]
-description = "Build the WebGPU client for the browser, for the loop of change and test"
+description = "Build both clients for the browser"
 run = "cargo xtask build"
 
-[tasks.models]
-description = "Turn the plane models of assets/planes/ into the GLB files of the client"
-run = "cargo xtask models"
-
-[tasks."build:release"]
-description = "Build both clients for the browser, for a playtest or the demo"
-run = "cargo xtask build --release"
+[tasks."build:dev"]
+description = "Build the WebGPU client alone and without the long optimisation, for the loop of change and test"
+run = "cargo xtask build --dev --webgpu"
 
 [tasks.test]
 description = "Run the tests of the game rules and of the server"
