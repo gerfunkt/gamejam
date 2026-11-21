@@ -1,6 +1,6 @@
 # Feasibility
 
-This report covers the technical, engineering, and game design limits of the outline in `game-notes.md`. It was last updated on 2026-11-20. The plan that follows from it is in `design.md`. Art direction is out of scope.
+This report covers the technical, engineering, and game design limits of the outline in `game-notes.md`. It was last updated on 2026-11-21. The plan that follows from it is in `design.md`. Art direction is out of scope.
 
 Each finding has one of three marks:
 
@@ -22,7 +22,7 @@ The current idea is a 3D multiplayer shooter with planes, in browsers on a LAN.
 | Serving | One Rust program: HTTPS, the game files, and the bus on port 5201 | Measured |
 | Destruction | Five breakable parts on each plane | Built in the prototype |
 | Build | Pure Rust. No C compiler, and no C code compiled. | Measured |
-| Camera input | Head pose as an optional view control, behind a reviewed shell page | The isolation is measured |
+| Camera input | Ruled out by the owner on 2026-11-21: the game uses no camera | The isolation was measured before the ruling |
 
 Everything else in the notes is in "Considered and set aside" at the end.
 
@@ -312,7 +312,7 @@ Security (note 16):
 - **Measured.** The development machine has no camera device. The agent develops with synthetic numbers.
 - **Read.** A browser grants the camera to the top-level page. A tracker inside an iframe of the game protects nothing, because the game page can then open the camera itself.
 - **Measured.** `probes/browser/isolation.mjs` tests the reverse design with a fake camera. A small "shell" page is the top level and owns the camera. The game runs in a sandboxed iframe from another origin. The shell opens the camera. The browser refuses the camera to the game. The game cannot read the page or the video element of the shell. The game receives the numbers that the shell sends.
-- **Ruling.** The browser enforces the boundary. The guarantee holds if a person owns the shell page and its origin, and reviews each change to it. If the agent also writes and deploys the shell, camera input is ruled out.
+- **Ruling.** The browser enforces the boundary. The guarantee holds if a person owns the shell page and its origin, and reviews each change to it. No person was named, and the owner ruled camera input out on 2026-11-21: the game uses no camera.
 
 ## Mobile browsers (note 19)
 
@@ -357,10 +357,9 @@ Note 19 asks whether a phone with its gyroscope makes a better game. This sectio
 
 ## Open questions
 
-1. WebGPU only, or WebGL2 as well? Compute needs WebGPU, and thus Chromium at the demo.
-2. Who owns the shell page for camera input? Without an owner, drop camera input.
-3. Wired or wireless at the demo? This decides whether the Wi-Fi steps above matter.
-4. Paid or free plans for Tripo and ElevenLabs?
+1. Paid or free plans for Tripo and ElevenLabs?
+
+Decided by the owner on 2026-11-21: WebGPU only, no WebGL2 build; no camera input, so no shell page is needed; and the demo is hosted locally, which makes the wired-against-wireless question and the Wi-Fi steps moot.
 
 Not tested yet: the feel of the controls by a person, packet loss on Wi-Fi, several real machines on one LAN, and the weakest demo laptop.
 

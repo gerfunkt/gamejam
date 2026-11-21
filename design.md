@@ -142,7 +142,6 @@ Add these only after a playtest says the loop works.
 
 - A battle royale rule set: a ring that closes, and the last plane flying wins.
 - Phones (note 19): built, and not yet tested on a real phone. See "Phone controls" in step 1. `feasibility.md` has the facts.
-- Head pose as an optional view control, behind the reviewed shell page (`feasibility.md`, "Camera input").
 - Relativity as a mode: a lower speed of light, with the vertex warp that the probe measured.
 - Generated models and sound through the asset services, once a person accepts a sample.
 
@@ -150,6 +149,8 @@ Add these only after a playtest says the loop works.
 
 These ideas stay out, with the reason. Each needs a reason to come back.
 
+- WebGL2 as a fallback: the owner decided on 2026-11-21 that the game needs WebGPU, and the demo runs on Chromium.
+- Camera input (head pose for the view): the isolation design works, but no person owns the shell page, and the owner ruled camera input out on 2026-11-21.
 - iroh, WebTransport, and WebRTC: the bus covers a LAN, and the transport can change behind two calls if playtests show hitches on Wi-Fi.
 - An authoritative server: it stops cheats, which do not matter at a jam.
 - Soft bodies, large destruction, and a physics engine: planes need a few parts and their own flight model.
@@ -171,7 +172,7 @@ Contest time is short, so the loop of edit, build, and test must be fast.
 | Risk | Sign | Answer |
 |---|---|---|
 | The flight is not fun | Players fly in circles and do not chase | Change `sim::tuning`, and playtest again |
-| Hitches on Wi-Fi | Remote planes jump | Wire the host, then try the steps in `feasibility.md` |
+| Hitches on Wi-Fi | Remote planes jump | The demo is hosted locally, so Wi-Fi does not apply there. If machines join over Wi-Fi, wire the host, then try the steps in `feasibility.md` |
 | WebGPU missing on a demo machine | The page says so at start | Bring a laptop with a current Chromium |
 | Too few players at the demo | Empty sky | Bots fill the sky in both modes |
 | The certificate warning confuses judges | Judges stop at the warning page | Open each demo browser on the game once before the judges come |
