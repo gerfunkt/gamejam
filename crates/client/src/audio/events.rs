@@ -25,9 +25,6 @@ const DIVE_HEIGHT: f32 = 200.0;
 const STEEP_DIVE: f32 = 0.3;
 /// The speed of descent that is too fast for the call of the altitude, in m/s.
 const FAST_SINK: f32 = 20.0;
-/// The turn of the nose from which Betty calls the load, in rad/s, and the speed it needs, in m/s.
-const HARD_TURN: f32 = 1.0;
-const HARD_TURN_SPEED: f32 = 80.0;
 /// The part of the boost speed from which the plane flies at its maximum speed.
 const MAX_SPEED_SHARE: f32 = 0.95;
 /// The angle from the nose within which a plane is the target of the nose, in radians.
@@ -136,7 +133,6 @@ pub(super) struct Heard {
 	target_protected: bool,
 	/// The missiles that follow the player, each with its shooter and its number.
 	threats: Vec<(PlaneId, u8)>,
-	nose: Vec3,
 }
 
 /// Return how loud a sound at `place` is for a listener at `ear`, from 0 to 1.
@@ -260,7 +256,7 @@ fn threats(frame: &Frame, heard: &mut Heard, cues: &mut Cues) {
 	heard.threats = threats;
 }
 
-/// Raise the events of the flight of the plane: the engine, the boost, the ground, and the load.
+/// Raise the events of the flight of the plane: the engine, the boost, and the ground.
 fn flight(frame: &Frame, heard: &mut Heard, cues: &mut Cues) {
 	let (own, alive) = (frame.own, frame.alive);
 	let pace = own.speed / tuning::BOOST_SPEED;
@@ -291,15 +287,6 @@ fn flight(frame: &Frame, heard: &mut Heard, cues: &mut Cues) {
 	if alive && height < DIVE_HEIGHT && (-nose.y).asin() > STEEP_DIVE {
 		cues.repeat("steep_dive_pullup");
 	}
-	let turn = if alive && heard.alive && frame.dt > 0.0 {
-		heard.nose.angle_between(nose) / frame.dt
-	} else {
-		0.0
-	};
-	if turn > HARD_TURN && own.speed > HARD_TURN_SPEED {
-		cues.repeat("hard_turn_over_g");
-	}
-	heard.nose = nose;
 
 	let protected = alive && own.is_protected();
 	cues.on("spawn_protected_start", heard.protected, protected);

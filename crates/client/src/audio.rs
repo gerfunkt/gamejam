@@ -10,7 +10,11 @@
 
 mod events;
 
-use std::{cell::RefCell, cmp::Reverse, collections::HashMap};
+use std::{
+	cell::RefCell,
+	cmp::Reverse,
+	collections::{HashMap, HashSet},
+};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -256,6 +260,7 @@ pub fn start() {
 		let Some(catalog) = text.and_then(|text| serde_json::from_str::<Catalog>(&text).ok()) else {
 			return;
 		};
+		let mut used = HashSet::new();
 		AUDIO.with_borrow_mut(|audio| {
 			let Some(audio) = audio else { return };
 			for (event, ids) in catalog.event_map {
@@ -263,19 +268,18 @@ pub fn start() {
 					Ids::One(id) => vec![id],
 					Ids::Many(ids) => ids,
 				};
+				used.extend(ids.iter().cloned());
 				audio.events.entry(event).or_default().extend(ids);
 			}
 		});
-		for asset in catalog.assets {
+		// A sound that no event names is never heard, so its file stays on the server.
+		for asset in catalog.assets.into_iter().filter(|asset| used.contains(&asset.id)) {
 			let role = match asset.category.as_str() {
 				"vo/betty" => Role::Say(Voice::Betty),
 				"sfx" if LOOPS.contains(&asset.id.as_str()) => Role::Loop,
 				"sfx" => Role::Effect,
 				_ => continue,
 			};
-			if asset.id == "betty_combined_reference" {
-				continue;
-			}
 			// The page may not be at the root of its server, so the path is relative to the page.
 			let path = asset.url.trim_start_matches('/').to_owned();
 			register(asset.id, path, role, asset.priority, asset.cooldown_s);

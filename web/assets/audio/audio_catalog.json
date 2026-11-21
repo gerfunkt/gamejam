@@ -81,10 +81,6 @@
       "betty_pullup_f16",
       "betty_pullup_wt"
     ],
-    "hard_turn_over_g": [
-      "betty_over_g",
-      "betty_g_over_limit"
-    ],
     "boost_max_speed": [
       "betty_max_speed",
       "sfx_exhaust_afterburner"
