@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":3,"timestamp":1795292357,"nonce":"fXGa00ZtriBbonttaFBbtSf2Slg=","message":"Implemented Rookie, Pilot, Veteran, and Ace bots in crates/sim/src/bots.rs with duel and evasion tests.","files":null}]}
+{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":4,"timestamp":1795292357,"nonce":"fiRt8RIAG3CuxROX3dYazNrNfiE=","status":2}]}
