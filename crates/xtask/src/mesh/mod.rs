@@ -2,4 +2,5 @@
 
 pub mod fbx;
 pub mod geometry;
+pub mod orient;
 pub mod scene;

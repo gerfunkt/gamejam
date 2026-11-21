@@ -12,6 +12,7 @@ use anyhow::{Context, Result, bail, ensure};
 
 mod mesh;
 mod models;
+mod record;
 
 const USAGE: &str = "\
 cargo xtask serve [--dev] [--webgpu] [-- <server options>]

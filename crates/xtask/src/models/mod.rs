@@ -12,10 +12,15 @@ use serde_json::json;
 use sim::Part;
 
 use self::{
-	fit::{Orientation, fit, orient, rules_box},
+	fit::{fit, rules_box},
 	parts::Regions,
 };
-use crate::mesh::{fbx, geometry::Triangle, scene};
+use crate::mesh::{
+	fbx,
+	geometry::Triangle,
+	orient::{Orientation, orient},
+	scene,
+};
 
 mod fit;
 mod glb;
