@@ -299,3 +299,88 @@ fn a_burst_damages_near_parts_more_than_far_parts() {
 		"a burst 200 m away damaged the plane"
 	);
 }
+
+/// A pilot that flies straight, and releases a flare while the missile is nearer than `distance`.
+fn flare_at(distance: f32) -> impl Fn(&Plane, Option<&Missile>) -> Controls {
+	move |plane, missile| {
+		let near = missile.is_some_and(|missile| missile.position.distance(plane.position) < distance);
+		Controls {
+			flare: near,
+			..toward(plane.forward())
+		}
+	}
+}
+
+fn flares(bus: &Bus) -> usize {
+	bus.log
+		.iter()
+		.filter(|(_, message)| matches!(message, Message::Flare { .. }))
+		.count()
+}
+
+#[test]
+fn a_flare_in_time_lures_the_missile_away_from_a_plane_that_flies_straight() {
+	let mut bus = duel(Vec3::new(40.0, 500.0, -400.0), 0.3);
+	assert!(
+		!missile_hits(&mut bus, flare_at(300.0)),
+		"the missile hit a plane that released a flare at 300 m"
+	);
+	assert!(flares(&bus) >= 1, "the plane released no flare");
+}
+
+#[test]
+fn a_flare_that_comes_too_late_does_not_save_the_plane() {
+	let mut bus = duel(Vec3::new(40.0, 500.0, -400.0), 0.3);
+	assert!(missile_hits(&mut bus, flare_at(tuning::FLARE_MIN_DISTANCE - 30.0)));
+	assert!(flares(&bus) >= 1, "the plane released no flare");
+}
+
+#[test]
+fn every_machine_sees_a_flare_and_the_missile_that_follows_it() {
+	let mut bus = duel(Vec3::new(40.0, 500.0, -400.0), 0.3);
+	let mut seen_by_shooter = false;
+	for _ in 0..(12.0 / tuning::STEP) as u32 {
+		let launched = launches(&bus) > 0;
+		bus.step(|number, game| {
+			if number == SHOOTER {
+				return hold_nose_on_target(game, !launched);
+			}
+			let plane = game.plane(PlaneId::Player(TARGET)).expect("the target");
+			flare_at(300.0)(plane, game.missiles().first())
+		});
+		let shooter = bus.machine(SHOOTER);
+		let lured = shooter.missiles().first().is_some_and(Missile::is_lured);
+		seen_by_shooter |= lured
+			&& shooter
+				.flares()
+				.iter()
+				.any(|flare| flare.owner == PlaneId::Player(TARGET));
+	}
+	assert!(
+		seen_by_shooter,
+		"the machine of the shooter never saw its missile follow a flare of the target"
+	);
+}
+
+#[test]
+fn the_rack_holds_three_flares_and_fills_one_at_a_time() {
+	let mut bus = Bus::new(&[SHOOTER], NO_BOTS);
+	bus.place(SHOOTER, Vec3::new(0.0, 500.0, 0.0), Quat::IDENTITY);
+	let hold = |_: u32, _: &Match| Controls {
+		flare: true,
+		..toward(Vec3::NEG_Z)
+	};
+	bus.run(f32::from(tuning::FLARES) * tuning::FLARE_INTERVAL + 1.0, hold);
+	assert_eq!(
+		flares(&bus),
+		usize::from(tuning::FLARES),
+		"a full rack releases each of its flares, one in each interval"
+	);
+	assert_eq!(bus.machine(SHOOTER).flares_ready(PlaneId::Player(SHOOTER)), Some(0));
+	bus.run(tuning::FLARE_RELOAD, hold);
+	assert_eq!(
+		flares(&bus),
+		usize::from(tuning::FLARES) + 1,
+		"one flare returns in each reload time"
+	);
+}

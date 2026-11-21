@@ -17,6 +17,7 @@ pub fn toward(aim: Vec3) -> Controls {
 		boost: false,
 		fire: false,
 		launch: false,
+		flare: false,
 	}
 }
 

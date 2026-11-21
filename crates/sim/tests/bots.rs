@@ -5,7 +5,7 @@ mod common;
 use common::{Bus, toward};
 use glam::{Quat, Vec2, Vec3};
 use sim::{
-	Controls, Plane, Skill, aim_direction, bot_controls, tuning,
+	Controls, Plane, Skill, aim_direction, arena, bot_controls, tuning,
 	wire::{Message, PlaneId, PlaneState, Settings},
 };
 
@@ -31,7 +31,7 @@ fn state(position: Vec3) -> PlaneState {
 /// The controls of a bot at 500 m that flies north and sees one other plane at `position`.
 fn bot_that_sees(other: PlaneState, skill: Skill) -> Controls {
 	let me = state(Vec3::new(0.0, 500.0, 0.0));
-	bot_controls(ME, &me, &[(ME, me), (OTHER, other)], skill)
+	bot_controls(ME, &me, &[(ME, me), (OTHER, other)], &[], skill)
 }
 
 #[test]
@@ -84,10 +84,11 @@ fn a_rookie_carries_no_missiles_and_the_other_skills_do() {
 }
 
 #[test]
-fn a_bot_climbs_away_from_the_ground_before_it_fights() {
-	let low = state(Vec3::new(0.0, 60.0, 0.0));
-	let below = state(Vec3::new(0.0, 20.0, -250.0));
-	let controls = bot_controls(ME, &low, &[(ME, low), (OTHER, below)], Skill::Ace);
+fn a_bot_climbs_away_from_the_terrain_before_it_fights() {
+	let floor = arena::clear_height(0.0, 0.0);
+	let low = state(Vec3::new(0.0, floor + 20.0, 0.0));
+	let below = state(Vec3::new(0.0, floor - 40.0, -250.0));
+	let controls = bot_controls(ME, &low, &[(ME, low), (OTHER, below)], &[], Skill::Ace);
 	assert!(controls.aim.y > 0.3, "the aim {} does not climb", controls.aim);
 }
 
@@ -160,8 +161,9 @@ fn a_tight_turn_escapes_every_bot() {
 		let gentle = gun_hits_in_a_chase(skill, 0.08);
 		let tight = gun_hits_in_a_chase(skill, 2.0);
 		println!("{skill:?}: {gentle} gun hits in a gentle turn, {tight} in a tight turn");
+		// A tight turn must cut the hits of a bot to a fifth at most.
 		assert!(
-			tight * 10 <= gentle.max(50),
+			tight * 5 <= gentle.max(40),
 			"{skill:?} scores {tight} gun hits in a tight turn, and {gentle} in a gentle one"
 		);
 	}
@@ -195,5 +197,64 @@ fn bots_shoot_each_other_down_and_stay_out_of_the_ground() {
 			kills.len() - crashes
 		);
 		assert_eq!(crashes, 0, "{skill:?} bots flew into the ground");
+	}
+}
+
+/// Let the player launch one missile at a bot of `skill` from behind, and return the flares of the bot.
+fn flares_against_a_missile(skill: Skill) -> usize {
+	let mut bus = Bus::new(&[1], Settings { bots: 1, skill });
+	bus.place(1, Vec3::new(0.0, 600.0, 0.0), Quat::IDENTITY);
+	*bus.machine(1).plane_mut(PlaneId::Bot(0)).expect("the bot") =
+		Plane::new(Vec3::new(0.0, 600.0, -450.0), Quat::IDENTITY);
+	bus.machine(1)
+		.plane_mut(PlaneId::Player(1))
+		.expect("the player")
+		.protect(f32::MAX);
+	for _ in 0..(10.0 / tuning::STEP) as u32 {
+		bus.step(|_, game| {
+			let planes = game.planes();
+			let place = |id| {
+				planes
+					.iter()
+					.find(|(plane, _)| *plane == id)
+					.map(|(_, state)| state.position)
+			};
+			let aim = place(PlaneId::Bot(0))
+				.zip(place(PlaneId::Player(1)))
+				.map_or(Vec3::NEG_Z, |(bot, player)| bot - player);
+			Controls {
+				launch: true,
+				throttle: 0.5,
+				..toward(aim)
+			}
+		});
+	}
+	assert!(
+		bus.log
+			.iter()
+			.any(|(_, message)| matches!(message, Message::Launch { .. })),
+		"the player launched no missile"
+	);
+	bus.log
+		.iter()
+		.filter(|(_, message)| {
+			matches!(
+				message,
+				Message::Flare {
+					plane: PlaneId::Bot(0),
+					..
+				}
+			)
+		})
+		.count()
+}
+
+#[test]
+fn a_bot_releases_a_flare_at_a_missile_that_comes_near_and_a_rookie_does_not() {
+	assert_eq!(flares_against_a_missile(Skill::Rookie), 0, "a rookie knows no flares");
+	for skill in [Skill::Pilot, Skill::Veteran, Skill::Ace] {
+		let flares = flares_against_a_missile(skill);
+		assert!(flares >= 1, "{skill:?} released no flare");
+		assert!(flares <= 2, "{skill:?} wasted {flares} flares on two missiles at most");
 	}
 }

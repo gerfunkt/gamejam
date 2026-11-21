@@ -23,7 +23,7 @@ fn fight(_: u32, session: &Session) -> Controls {
 	let game = session.game().expect("a match runs");
 	let planes = game.planes();
 	match planes.iter().find(|(id, _)| *id == game.me()) {
-		Some((me, state)) => bot_controls(*me, state, &planes, Skill::Ace),
+		Some((me, state)) => bot_controls(*me, state, &planes, game.missiles(), Skill::Ace),
 		None => toward(Vec3::NEG_Z),
 	}
 }

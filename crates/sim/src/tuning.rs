@@ -66,25 +66,29 @@ pub const CEILING_FADE: f32 = 200.0;
 
 // Damage that changes the flight.
 
-/// The lift that stays with one wing, as a part of the full lift.
-pub const ONE_WING_LIFT: f32 = 0.55;
-/// The lift that stays with no wing, as a part of the full lift.
-pub const NO_WING_LIFT: f32 = 0.1;
-/// The roll control that stays with one wing, as a part of the full control.
-pub const ONE_WING_ROLL: f32 = 0.5;
-/// The roll control that stays with no wing, as a part of the full control.
-pub const NO_WING_ROLL: f32 = 0.2;
-/// How fast a lost wing rolls the plane toward its side, in rad/s.
-pub const LOST_WING_ROLL: f32 = 1.2;
-/// How fast a lost wing turns the nose toward its side, in rad/s.
-pub const LOST_WING_YAW: f32 = 0.2;
+/// How long a plane with a lost wing falls before it is destroyed, in seconds.
+pub const WING_LOSS_SECONDS: f32 = 3.0;
+/// How fast a plane with a lost wing spins toward the side of that wing, in rad/s.
+pub const WRECK_SPIN: f32 = 4.5;
+/// How fast the nose of a plane with a lost wing drops, in rad/s.
+pub const WRECK_NOSE_DROP: f32 = 1.4;
+/// The acceleration of a plane with a lost wing toward the ground, in m/s².
+pub const WRECK_FALL: f32 = 25.0;
 /// The pitch and yaw control that stays without the tail, as a part of the full control.
 pub const NO_TAIL_CONTROL: f32 = 0.3;
 
 // The world.
 
-/// A plane below this height hits the ground, in metres.
-pub const GROUND_CLEARANCE: f32 = 2.0;
+/// A plane touches the terrain when its centre comes this near to it, in metres.
+pub const PLANE_RADIUS: f32 = 2.0;
+/// The height of the highest hill, in metres.
+pub const HILL_HEIGHT: f32 = 140.0;
+/// The number of blocks that stand on the ground.
+pub const FEATURES: u32 = 160;
+/// The height of the tallest block, in metres.
+pub const FEATURE_MAX_HEIGHT: f32 = 90.0;
+/// How deep a block stands in the ground, in metres.
+pub const FEATURE_SUNK: f32 = 12.0;
 /// The distance from the centre beyond which a plane turns back by itself, in metres.
 pub const ARENA_RADIUS: f32 = 2500.0;
 
@@ -152,6 +156,28 @@ pub const BURST_DAMAGE: f32 = 70.0;
 /// The health that a burst takes from a part at the edge of its reach.
 pub const BURST_EDGE_DAMAGE: f32 = 20.0;
 
+// Flares.
+
+/// The number of flares on a plane.
+pub const FLARES: u8 = 3;
+/// The time until an empty place in the rack holds a flare again, in seconds.
+pub const FLARE_RELOAD: f32 = 12.0;
+/// The time between two flares of one plane, in seconds.
+pub const FLARE_INTERVAL: f32 = 1.0;
+/// How long a flare burns, in seconds.
+pub const FLARE_SECONDS: f32 = 3.0;
+/// A flare lures only a missile that is still farther than this from its target, in metres.
+/// A flare that comes later does not save the plane.
+pub const FLARE_MIN_DISTANCE: f32 = 120.0;
+/// The speed of a new flare along the flight of its plane, as a part of the speed of the plane.
+pub const FLARE_SPEED: f32 = 0.6;
+/// The speed with which a plane throws a flare downward, in m/s.
+pub const FLARE_EJECT: f32 = 25.0;
+/// How fast a flare loses its speed, as a part for each second.
+pub const FLARE_DRAG: f32 = 1.0;
+/// How fast a flare falls faster, in m/s².
+pub const FLARE_FALL: f32 = 9.8;
+
 // Bots.
 
 /// How far ahead on its ring a bot without a target aims, in radians.
@@ -159,13 +185,14 @@ pub const BOT_IDLE_LEAD: f32 = 0.5;
 /// The radius of the ring on which a bot without a target circles, in metres.
 pub const BOT_IDLE_RADIUS: f32 = 600.0;
 /// The height at which a bot without a target circles, in metres.
-pub const BOT_IDLE_HEIGHT: f32 = 400.0;
+pub const BOT_IDLE_HEIGHT: f32 = 500.0;
 /// Inside this distance of its target, a bot that matches speed does so, in metres.
 pub const BOT_CHASE_RANGE: f32 = 400.0;
 /// The distance behind its target at which such a bot holds its speed, in metres.
 pub const BOT_CHASE_DISTANCE: f32 = 180.0;
-/// Below this height, and this far below the ceiling, a bot leaves the fight to fly level, in metres.
-pub const BOT_SAFE_HEIGHT: f32 = 150.0;
+/// A bot leaves the fight to fly level when it is nearer than this to the highest terrain below
+/// it, or to the ceiling, in metres.
+pub const BOT_SAFE_HEIGHT: f32 = 60.0;
 
 /// How much a bot prefers a plane ahead of its nose: each radian off the nose counts as this
 /// part of the distance again.
@@ -192,10 +219,10 @@ pub const KILL_CREDIT_SECONDS: f32 = 10.0;
 pub const SPAWN_MIN_RADIUS: f32 = 500.0;
 /// The farthest distance of a spawn from the centre, in metres.
 pub const SPAWN_MAX_RADIUS: f32 = 900.0;
-/// The lowest height of a spawn, in metres.
-pub const SPAWN_MIN_HEIGHT: f32 = 350.0;
+/// The lowest height of a spawn, in metres. It is above all terrain.
+pub const SPAWN_MIN_HEIGHT: f32 = 400.0;
 /// The greatest height of a spawn, in metres.
-pub const SPAWN_MAX_HEIGHT: f32 = 550.0;
+pub const SPAWN_MAX_HEIGHT: f32 = 600.0;
 
 // Remote planes. These times are in milliseconds, as the clocks of the machines are.
 

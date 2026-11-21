@@ -2,6 +2,8 @@ use glam::Vec3;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+	arena,
+	missile::Missile,
 	plane::Controls,
 	tuning,
 	wire::{PlaneId, PlaneState},
@@ -40,6 +42,9 @@ struct Profile {
 	matches_speed: bool,
 	/// The farthest target at which the bot launches a missile, in metres. A rookie carries none.
 	missile_range: Option<f32>,
+	/// The distance of a missile at which the bot releases a flare, in metres. A late flare is
+	/// too late, and a rookie releases none.
+	flare_distance: f32,
 }
 
 impl Skill {
@@ -76,6 +81,7 @@ impl Skill {
 				fire_range: 320.0,
 				matches_speed: false,
 				missile_range: None,
+				flare_distance: 0.0,
 			},
 			Skill::Pilot => Profile {
 				lead: 0.8,
@@ -86,6 +92,7 @@ impl Skill {
 				fire_range: 420.0,
 				matches_speed: true,
 				missile_range: Some(550.0),
+				flare_distance: 200.0,
 			},
 			Skill::Veteran => Profile {
 				lead: 0.9,
@@ -96,6 +103,7 @@ impl Skill {
 				fire_range: 480.0,
 				matches_speed: true,
 				missile_range: Some(650.0),
+				flare_distance: 300.0,
 			},
 			Skill::Ace => Profile {
 				lead: 1.0,
@@ -106,6 +114,7 @@ impl Skill {
 				fire_range: 520.0,
 				matches_speed: true,
 				missile_range: Some(750.0),
+				flare_distance: 400.0,
 			},
 		}
 	}
@@ -115,9 +124,16 @@ impl Skill {
 ///
 /// The bot chases a plane that can be hit, so it leaves a protected plane alone. It prefers a
 /// near plane ahead of its nose. It aims ahead of its target, fires when its aim is good, and launches a missile when its lock
-/// closed. Without a target, it circles the centre. The ground comes before the fight.
+/// closed, and it releases a flare when a missile comes near. Without a target, it circles the
+/// centre. The terrain comes before the fight.
 #[must_use]
-pub fn bot_controls(me: PlaneId, state: &PlaneState, planes: &[(PlaneId, PlaneState)], skill: Skill) -> Controls {
+pub fn bot_controls(
+	me: PlaneId,
+	state: &PlaneState,
+	planes: &[(PlaneId, PlaneState)],
+	missiles: &[Missile],
+	skill: Skill,
+) -> Controls {
 	let profile = skill.profile();
 	let forward = state.forward();
 	// The bot prefers a plane ahead of its nose to a nearer plane behind it. Thus a bot that is
@@ -138,6 +154,7 @@ pub fn bot_controls(me: PlaneId, state: &PlaneState, planes: &[(PlaneId, PlaneSt
 		boost: false,
 		fire: false,
 		launch: false,
+		flare: false,
 	};
 	let goal = match target {
 		// The place where a bullet meets the target.
@@ -178,9 +195,21 @@ pub fn bot_controls(me: PlaneId, state: &PlaneState, planes: &[(PlaneId, PlaneSt
 		}
 	}
 
-	// A dive needs height to end, the more the faster the plane sinks.
-	let sink = (-state.velocity().y).max(0.0);
-	if state.position.y < tuning::BOT_SAFE_HEIGHT + sink * tuning::BOT_PULL_UP_SECONDS {
+	// A missile that comes near gets a flare, if the pilot knows the trick.
+	controls.flare = missiles.iter().any(|missile| {
+		missile.target == me
+			&& missile.is_seeking()
+			&& !missile.is_lured()
+			&& missile.position.distance(state.position) < profile.flare_distance
+	});
+
+	// The terrain comes before the fight. A dive needs height to end, the more the faster the
+	// plane sinks, and a hill ahead counts like a hill below.
+	let velocity = state.velocity();
+	let ahead = state.position + velocity * tuning::BOT_PULL_UP_SECONDS;
+	let floor = arena::clear_height(state.position.x, state.position.z).max(arena::clear_height(ahead.x, ahead.z))
+		+ tuning::BOT_SAFE_HEIGHT;
+	if state.position.y < floor + (-velocity.y).max(0.0) * tuning::BOT_PULL_UP_SECONDS {
 		controls.aim = Vec3::new(forward.x, 0.0, forward.z).normalize_or(Vec3::NEG_Z) + Vec3::Y * 0.6;
 	} else if state.position.y > tuning::CEILING - tuning::BOT_SAFE_HEIGHT {
 		controls.aim = Vec3::new(controls.aim.x, controls.aim.y.min(-0.2), controls.aim.z);

@@ -3,7 +3,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use glam::{Quat, Vec2, Vec3};
-use sim::{Controls, FixedSteps, Part, Plane, aim_direction, level_frame, tuning};
+use sim::{Controls, FixedSteps, Part, Plane, aim_direction, arena, level_frame, tuning};
 
 /// A whole plane at 500 m that flies north, which is -Z.
 fn plane() -> Plane {
@@ -17,6 +17,7 @@ fn controls(aim: Vec3, throttle: f32) -> Controls {
 		boost: false,
 		fire: false,
 		launch: false,
+		flare: false,
 	}
 }
 
@@ -173,57 +174,64 @@ fn boost_gives_speed_until_the_tank_is_empty() {
 }
 
 #[test]
-fn a_lost_wing_rolls_the_plane_to_its_side_and_costs_height() {
+fn a_lost_wing_spins_the_plane_to_its_side_and_ends_it_within_seconds() {
 	let mut whole = plane();
 	let mut damaged = plane();
 	damaged.damage(Part::LeftWing, tuning::WING_HEALTH);
-	assert!(damaged.is_broken(Part::LeftWing));
+	assert!(damaged.is_falling());
 
-	fly(&mut whole, controls(Vec3::NEG_Z, 1.0), 4.0);
-	fly(&mut damaged, controls(Vec3::NEG_Z, 1.0), 4.0);
-
+	fly(&mut whole, controls(Vec3::NEG_Z, 1.0), 0.3);
+	fly(&mut damaged, controls(Vec3::NEG_Z, 1.0), 0.3);
 	let right = damaged.orientation * Vec3::X;
+	assert!(right.y > 0.5, "the left side does not drop: right wing at {}", right.y);
+	assert!(!damaged.is_destroyed(), "the plane ended at once");
+
+	fly(&mut whole, controls(Vec3::NEG_Z, 1.0), 1.2);
+	fly(&mut damaged, controls(Vec3::NEG_Z, 1.0), 1.2);
 	assert!(
-		right.y > 0.1,
-		"the left side does not hang low: right wing at {}",
-		right.y
-	);
-	assert!(
-		damaged.position.y < whole.position.y - 20.0,
+		damaged.position.y < whole.position.y - 15.0,
 		"height {} against {}",
 		damaged.position.y,
 		whole.position.y
 	);
-	assert!(
-		damaged.position.x < whole.position.x - 1.0,
-		"the plane did not pull to the left: {}",
-		damaged.position.x
+
+	fly(
+		&mut damaged,
+		controls(Vec3::NEG_Z, 1.0),
+		tuning::WING_LOSS_SECONDS - 1.4,
 	);
+	assert!(
+		damaged.is_destroyed(),
+		"the plane still flies after {} s",
+		tuning::WING_LOSS_SECONDS + 0.1
+	);
+	assert!(!whole.is_destroyed());
 }
 
 #[test]
-fn a_plane_with_one_wing_turns_slowly_away_from_the_lost_side() {
-	let mut toward = plane();
-	let mut away = plane();
-	for plane in [&mut toward, &mut away] {
-		plane.damage(Part::LeftWing, tuning::WING_HEALTH);
+fn a_pilot_cannot_steer_a_plane_that_lost_a_wing() {
+	let mut up = plane();
+	let mut down = plane();
+	for plane in [&mut up, &mut down] {
+		plane.damage(Part::RightWing, tuning::WING_HEALTH);
 	}
-	fly(&mut toward, controls(Vec3::NEG_X, 0.5), 2.0);
-	fly(&mut away, controls(Vec3::X, 0.5), 2.0);
+	fly(&mut up, controls(Vec3::new(1.0, 1.0, -1.0), 1.0), 1.5);
+	fly(&mut down, controls(Vec3::new(-1.0, -1.0, -1.0), 0.0), 1.5);
 	assert!(
-		off_nose(&toward, Vec3::NEG_X) + 0.3 < off_nose(&away, Vec3::X),
-		"toward the lost side {} rad off, away from it {} rad off",
-		off_nose(&toward, Vec3::NEG_X),
-		off_nose(&away, Vec3::X)
+		up.position.distance(down.position) < 0.5,
+		"the controls moved the wreck: {} and {}",
+		up.position,
+		down.position
 	);
 }
 
 #[test]
-fn a_plane_with_one_wing_can_still_hold_its_height_with_the_nose_up() {
-	let mut damaged = plane();
-	damaged.damage(Part::RightWing, tuning::WING_HEALTH);
-	fly(&mut damaged, controls(Vec3::new(0.0, 0.35, -1.0), 1.0), 10.0);
-	assert!(damaged.position.y > 480.0, "height {}", damaged.position.y);
+fn a_plane_without_both_wings_falls_too() {
+	let mut plane = plane();
+	plane.damage(Part::LeftWing, tuning::WING_HEALTH);
+	plane.damage(Part::RightWing, tuning::WING_HEALTH);
+	fly(&mut plane, controls(Vec3::NEG_Z, 1.0), tuning::WING_LOSS_SECONDS + 0.1);
+	assert!(plane.is_destroyed());
 }
 
 #[test]
@@ -268,6 +276,47 @@ fn a_plane_that_meets_the_ground_is_destroyed_and_stops() {
 	let wreck = plane.position;
 	fly(&mut plane, controls(Vec3::NEG_Z, 1.0), 1.0);
 	assert_eq!(plane.position, wreck, "the wreck moved");
+}
+
+#[test]
+fn a_plane_that_touches_a_hill_is_destroyed() {
+	// The highest ground on a line through the arena.
+	let (x, top) = (0..500)
+		.map(|step| step as f32 * 10.0 - 2500.0)
+		.map(|x| (x, arena::ground_height(x, 300.0)))
+		.fold((0.0, 0.0), |best, hill| if hill.1 > best.1 { hill } else { best });
+	assert!(top > 60.0, "the line crosses no hill: {top} m");
+	let mut above = Plane::new(Vec3::new(x, top + 30.0, 300.0), Quat::IDENTITY);
+	above.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
+	assert!(!above.is_destroyed(), "a plane 30 m above the hill crashed");
+	let mut below = Plane::new(Vec3::new(x, top - 5.0, 300.0), Quat::IDENTITY);
+	below.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
+	assert!(below.is_destroyed(), "a plane inside the hill flies on");
+}
+
+#[test]
+fn a_plane_that_touches_a_feature_is_destroyed() {
+	let tallest = arena::features()
+		.iter()
+		.max_by(|a, b| a.half_extents.y.total_cmp(&b.half_extents.y))
+		.expect("the arena has features");
+	let top = tallest.centre.y + tallest.half_extents.y;
+	assert!(
+		top > arena::ground_height(tallest.centre.x, tallest.centre.z) + 30.0,
+		"the tallest feature is no obstacle"
+	);
+	let mut inside = Plane::new(
+		tallest.centre + Vec3::Y * (tallest.half_extents.y - 5.0),
+		Quat::IDENTITY,
+	);
+	inside.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
+	assert!(inside.is_destroyed(), "a plane inside a feature flies on");
+	let mut over = Plane::new(
+		Vec3::new(tallest.centre.x, top + 20.0, tallest.centre.z),
+		Quat::IDENTITY,
+	);
+	over.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
+	assert!(!over.is_destroyed(), "a plane 20 m over a feature crashed");
 }
 
 #[test]

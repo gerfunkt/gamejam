@@ -419,3 +419,56 @@ fn a_state_is_small_enough_to_send_thirty_times_a_second() {
 	let bytes = state.encode().len();
 	assert!(bytes <= 64, "a state takes {bytes} bytes");
 }
+
+#[test]
+fn a_plane_that_loses_a_wing_falls_and_its_attacker_gets_the_kill() {
+	let mut bus = chase();
+	let broken_wing = Message::Hit {
+		target: PlaneId::Player(TARGET),
+		part: Part::LeftWing,
+		damage: tuning::WING_HEALTH,
+		by: PlaneId::Player(SHOOTER),
+	};
+	let now = bus.now;
+	for number in [SHOOTER, TARGET] {
+		bus.machine(number).receive(now, SHOOTER, &broken_wing);
+	}
+	let target = bus
+		.machine(TARGET)
+		.plane(PlaneId::Player(TARGET))
+		.expect("the target")
+		.clone();
+	assert!(target.is_falling() && !target.is_destroyed());
+
+	bus.run(tuning::WING_LOSS_SECONDS + 0.2, |_, _| toward(Vec3::NEG_Z));
+	let kill = Message::Kill {
+		victim: PlaneId::Player(TARGET),
+		killer: Some(PlaneId::Player(SHOOTER)),
+	};
+	assert_eq!(
+		bus.log,
+		[(TARGET, kill)],
+		"the fall must end in one kill for the attacker"
+	);
+}
+
+#[test]
+fn a_bullet_ends_at_the_terrain() {
+	let mut bus = Bus::new(&[SHOOTER], NO_BOTS);
+	// The shooter dives at the ground, so its bullets reach the ground within their flight.
+	bus.place(SHOOTER, Vec3::new(0.0, 330.0, 0.0), Quat::from_rotation_x(-1.2));
+	bus.run(0.6, |_, _| Controls {
+		fire: true,
+		..toward(Vec3::NEG_Y)
+	});
+	let bullets = bus.machine(SHOOTER).bullets().to_vec();
+	assert!(!bullets.is_empty(), "the gun fired no bullet");
+	for bullet in bullets {
+		let ground = sim::arena::ground_height(bullet.position.x, bullet.position.z);
+		assert!(
+			bullet.position.y >= ground,
+			"a bullet flies {} m under the ground",
+			ground - bullet.position.y
+		);
+	}
+}

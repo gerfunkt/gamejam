@@ -4,9 +4,10 @@ use std::f32::consts::TAU;
 use glam::{Quat, Vec3};
 
 use crate::{
+	arena,
 	bot::{Skill, bot_controls},
 	gun::{Bullet, Gun, hit_part_along},
-	missile::{Launcher, Missile, burst_damage},
+	missile::{Flare, FlareRack, Launcher, Missile, burst_damage},
 	plane::{Controls, Part, Plane},
 	rng::Rng,
 	timeline::Timeline,
@@ -58,6 +59,7 @@ struct Local {
 	bot: Option<Skill>,
 	gun: Gun,
 	launcher: Launcher,
+	flares: FlareRack,
 	/// The controls of the last step.
 	controls: Controls,
 	kills: u16,
@@ -114,6 +116,7 @@ pub struct Match {
 	remotes: BTreeMap<PlaneId, Remote>,
 	bullets: Vec<Bullet>,
 	missiles: Vec<Missile>,
+	flares: Vec<Flare>,
 	outbox: Vec<Message>,
 	events: Vec<Event>,
 }
@@ -138,6 +141,7 @@ impl Match {
 			remotes: BTreeMap::new(),
 			bullets: Vec::new(),
 			missiles: Vec::new(),
+			flares: Vec::new(),
 			outbox: Vec::new(),
 			events: Vec::new(),
 		};
@@ -186,6 +190,7 @@ impl Match {
 		self.fire_guns(&planes, dt);
 		self.move_bullets(&planes, dt);
 		self.launch_missiles(&planes, dt);
+		self.release_flares(dt);
 		self.move_missiles(&planes, dt);
 		if self.steps.is_multiple_of(tuning::STEPS_PER_STATE) {
 			// The clock wraps after 49 days, which no match reaches.
@@ -247,6 +252,15 @@ impl Match {
 					self.missiles
 						.retain(|other| other.live || (other.shooter, other.number) != (shooter, missile));
 					self.events.push(Event::Burst { position });
+				}
+			}
+			Message::Flare {
+				plane,
+				position,
+				velocity,
+			} => {
+				if self.may_fly(sender, plane) {
+					self.flares.push(Flare::new(plane, position, velocity));
 				}
 			}
 			Message::EndMatch | Message::Lobby { .. } | Message::Profile { .. } => {}
@@ -327,6 +341,18 @@ impl Match {
 		&self.bullets
 	}
 
+	/// Return the number of flares that the plane with this id can release, if this machine flies it.
+	#[must_use]
+	pub fn flares_ready(&self, id: PlaneId) -> Option<u8> {
+		Some(self.local(id)?.flares.ready())
+	}
+
+	/// Return the flares that burn.
+	#[must_use]
+	pub fn flares(&self) -> &[Flare] {
+		&self.flares
+	}
+
 	/// Return the missiles in flight.
 	#[must_use]
 	pub fn missiles(&self) -> &[Missile] {
@@ -357,6 +383,7 @@ impl Match {
 			boost: false,
 			fire: false,
 			launch: false,
+			flare: false,
 		};
 		self.locals.push(Local {
 			id,
@@ -364,6 +391,7 @@ impl Match {
 			bot,
 			gun: Gun::default(),
 			launcher: Launcher::default(),
+			flares: FlareRack::default(),
 			controls,
 			kills: 0,
 			deaths: 0,
@@ -409,7 +437,7 @@ impl Match {
 			}
 			let local = &mut self.locals[index];
 			let controls = match local.bot {
-				Some(skill) => bot_controls(local.id, &local.state(), seen, skill),
+				Some(skill) => bot_controls(local.id, &local.state(), seen, &self.missiles, skill),
 				None => *input,
 			};
 			local.controls = controls;
@@ -456,8 +484,11 @@ impl Match {
 		let (outbox, events) = (&mut self.outbox, &mut self.events);
 		self.bullets.retain_mut(|bullet| {
 			let from = bullet.step(dt);
+			if bullet.is_spent() || arena::touches_terrain(bullet.position, 0.0) {
+				return false;
+			}
 			if !bullet.live {
-				return !bullet.is_spent();
+				return true;
 			}
 			let targets = planes
 				.iter()
@@ -481,7 +512,7 @@ impl Match {
 					part,
 				});
 			}
-			hit.is_none() && !bullet.is_spent()
+			hit.is_none()
 		});
 	}
 
@@ -501,10 +532,30 @@ impl Match {
 		}
 	}
 
+	/// Release the flares that the pilots ask for, and move the flares that burn.
+	///
+	/// A flare starts on every machine, this one included, when the bus delivers its message.
+	fn release_flares(&mut self, dt: f32) {
+		for local in &mut self.locals {
+			if local.flares.step(local.controls.flare && local.respawn.is_none(), dt) {
+				let plane = &local.plane;
+				self.outbox.push(Message::Flare {
+					plane: local.id,
+					position: plane.position - plane.forward() * tuning::MUZZLE,
+					velocity: plane.velocity() * tuning::FLARE_SPEED + Vec3::NEG_Y * tuning::FLARE_EJECT,
+				});
+			}
+		}
+		self.flares.retain_mut(|flare| {
+			flare.step(dt);
+			!flare.is_spent()
+		});
+	}
+
 	fn move_missiles(&mut self, planes: &[(PlaneId, PlaneState)], dt: f32) {
-		let (outbox, events) = (&mut self.outbox, &mut self.events);
+		let (outbox, events, flares) = (&mut self.outbox, &mut self.events, &self.flares);
 		self.missiles.retain_mut(|missile| {
-			let fused = missile.step(planes, dt);
+			let fused = missile.step(planes, flares, dt);
 			if !(missile.live && fused) {
 				return !missile.is_spent();
 			}

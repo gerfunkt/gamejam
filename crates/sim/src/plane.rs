@@ -1,16 +1,16 @@
 use glam::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
 
-use crate::{steer::steer_toward, tuning};
+use crate::{arena, steer::steer_toward, tuning};
 
 /// A part of a plane that damage can break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Part {
 	/// The body. A plane without it is destroyed.
 	Fuselage,
-	/// The left wing. Without it, the plane rolls and turns to the left, and loses lift.
+	/// The left wing. Without it, the plane spins to the left, falls, and is destroyed within seconds.
 	LeftWing,
-	/// The right wing. Without it, the plane rolls and turns to the right, and loses lift.
+	/// The right wing. Without it, the plane spins to the right, falls, and is destroyed within seconds.
 	RightWing,
 	/// The tail. Without it, the plane loses most of its pitch and yaw control.
 	Tail,
@@ -91,6 +91,8 @@ pub struct Controls {
 	pub fire: bool,
 	/// Whether the pilot asks for a missile launch.
 	pub launch: bool,
+	/// Whether the pilot asks for a flare, which lures a missile away.
+	pub flare: bool,
 }
 
 /// One plane: where it is, how it flies, and which of its parts still hold.
@@ -106,6 +108,8 @@ pub struct Plane {
 	/// The pitch, yaw, and roll rates, in rad/s.
 	rates: Vec3,
 	sink: f32,
+	/// The seconds since the plane lost a wing.
+	falling: f32,
 	boost: f32,
 	boosting: bool,
 	protection: f32,
@@ -122,6 +126,7 @@ impl Plane {
 			health: Part::ALL.map(Part::full_health),
 			rates: Vec3::ZERO,
 			sink: 0.0,
+			falling: 0.0,
 			boost: tuning::BOOST_SECONDS,
 			boosting: false,
 			protection: 0.0,
@@ -222,23 +227,55 @@ impl Plane {
 	}
 
 	/// Advance the flight by `dt` seconds under `controls`. A destroyed plane does not move.
+	///
+	/// A plane that touches the terrain is destroyed. A plane that lost a wing no longer answers
+	/// its pilot: it falls, and it is destroyed within [`tuning::WING_LOSS_SECONDS`].
 	pub fn step(&mut self, controls: &Controls, dt: f32) {
 		if self.is_destroyed() {
 			return;
 		}
 		self.protection = (self.protection - dt).max(0.0);
-		self.turn(controls, dt);
-		let lift = self.lift();
-		self.drop_nose(lift, dt);
-		self.sink = tuning::SINK_SPEED * (1.0 - lift);
-		self.accelerate(controls, dt);
+		if self.wings() < 2 {
+			self.fall(dt);
+		} else {
+			self.turn(controls, dt);
+			let lift = self.lift();
+			self.drop_nose(tuning::NOSE_DROP_RATE * (1.0 - lift) * dt);
+			self.sink = tuning::SINK_SPEED * (1.0 - lift);
+			self.accelerate(controls, dt);
+		}
 		self.position += self.velocity() * dt;
-		if self.position.y < tuning::GROUND_CLEARANCE {
+		if self.falling >= tuning::WING_LOSS_SECONDS || arena::touches_terrain(self.position, tuning::PLANE_RADIUS) {
 			self.destroy();
 		}
 	}
 
-	/// Turn the nose toward the aim of the pilot, as far as the parts allow.
+	/// Return whether the plane lost a wing and falls out of the sky.
+	#[must_use]
+	pub fn is_falling(&self) -> bool {
+		!self.is_destroyed() && self.wings() < 2
+	}
+
+	/// Spin and drop a plane that lost a wing.
+	fn fall(&mut self, dt: f32) {
+		self.falling += dt;
+		self.boosting = false;
+		let lost_left = f32::from(self.is_broken(Part::LeftWing));
+		let lost_right = f32::from(self.is_broken(Part::RightWing));
+		// The plane spins toward the lost wing. Without both wings, it spins one way.
+		let spin = if lost_left == lost_right {
+			1.0
+		} else {
+			lost_right - lost_left
+		};
+		self.rates = Vec3::new(0.0, 0.0, spin * tuning::WRECK_SPIN);
+		self.orientation = (self.orientation * Quat::from_rotation_z(-self.rates.z * dt)).normalize();
+		self.drop_nose(tuning::WRECK_NOSE_DROP * dt);
+		self.sink += tuning::WRECK_FALL * dt;
+		self.speed = (self.speed - tuning::DRAG * dt).max(0.0);
+	}
+
+	/// Turn the nose toward the aim of the pilot, as far as the tail allows.
 	fn turn(&mut self, controls: &Controls, dt: f32) {
 		let steering = steer_toward(self.orientation, self.bounded_aim(controls.aim));
 		let agility = agility(self.speed);
@@ -247,19 +284,10 @@ impl Plane {
 		} else {
 			1.0
 		};
-		let lost_left = f32::from(self.is_broken(Part::LeftWing));
-		let lost_right = f32::from(self.is_broken(Part::RightWing));
-		let roll_control = match self.wings() {
-			2 => 1.0,
-			1 => tuning::ONE_WING_ROLL,
-			_ => tuning::NO_WING_ROLL,
-		};
-		// A lost wing pulls the plane toward its own side.
-		let pull = lost_right - lost_left;
 		let target = Vec3::new(
 			steering.pitch * tuning::PITCH_RATE * agility * tail,
-			steering.yaw * tuning::YAW_RATE * agility * tail + pull * tuning::LOST_WING_YAW,
-			steering.roll * tuning::ROLL_RATE * agility * roll_control + pull * tuning::LOST_WING_ROLL,
+			steering.yaw * tuning::YAW_RATE * agility * tail,
+			steering.roll * tuning::ROLL_RATE * agility,
 		);
 		self.rates += (target - self.rates) * (dt / tuning::RESPONSE_TIME).min(1.0);
 		let turn = Quat::from_rotation_y(-self.rates.y * dt)
@@ -287,22 +315,16 @@ impl Plane {
 
 	/// Return the lift, from 0 for none to 1 for level flight without effort.
 	fn lift(&self) -> f32 {
-		let wings = match self.wings() {
-			2 => 1.0,
-			1 => tuning::ONE_WING_LIFT,
-			_ => tuning::NO_WING_LIFT,
-		};
 		let speed = smoothstep((self.speed - tuning::STALL_LOW) / (tuning::STALL_HIGH - tuning::STALL_LOW));
 		let air = 1.0 - ((self.position.y - tuning::CEILING) / tuning::CEILING_FADE).clamp(0.0, 1.0);
-		wings * speed * air
+		speed * air
 	}
 
-	/// Turn the nose toward the ground, the faster the less lift the plane has.
-	fn drop_nose(&mut self, lift: f32, dt: f32) {
+	/// Turn the nose toward the ground by `angle` radians.
+	fn drop_nose(&mut self, angle: f32) {
 		let axis = self.forward().cross(Vec3::NEG_Y);
 		if let Some(axis) = axis.try_normalize() {
-			let drop = Quat::from_axis_angle(axis, tuning::NOSE_DROP_RATE * (1.0 - lift) * dt);
-			self.orientation = (drop * self.orientation).normalize();
+			self.orientation = (Quat::from_axis_angle(axis, angle) * self.orientation).normalize();
 		}
 	}
 

@@ -151,6 +151,15 @@ pub enum Message {
 		/// Where the missile ended, in metres.
 		position: Vec3,
 	},
+	/// A flare that a plane of the sender released. A missile that follows the plane can follow it instead.
+	Flare {
+		/// The plane that released the flare.
+		plane: PlaneId,
+		/// Where the flare starts, in metres.
+		position: Vec3,
+		/// The velocity with which it starts, in m/s.
+		velocity: Vec3,
+	},
 	/// The host ends the match, and every player sees the results.
 	EndMatch,
 	/// The lobby of the room, as its host holds it.

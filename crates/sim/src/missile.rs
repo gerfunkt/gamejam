@@ -7,6 +7,7 @@
 use glam::Vec3;
 
 use crate::{
+	arena,
 	plane::Part,
 	tuning,
 	wire::{PlaneId, PlaneState},
@@ -29,6 +30,8 @@ pub struct Missile {
 	fuel: f32,
 	/// A missile that lost sight of its target flies straight on, and never finds it again.
 	seeking: bool,
+	/// Whether the missile follows a flare in place of its target.
+	lured: bool,
 	/// Whether this machine decides the burst of the missile. The missile of a remote plane is only drawn.
 	pub(crate) live: bool,
 }
@@ -52,6 +55,7 @@ impl Missile {
 			speed: tuning::MISSILE_LAUNCH_SPEED,
 			fuel: tuning::MISSILE_FUEL,
 			seeking: true,
+			lured: false,
 			live,
 		}
 	}
@@ -67,34 +71,67 @@ impl Missile {
 		self.seeking
 	}
 
+	/// Return whether the missile follows a flare in place of its target.
+	#[must_use]
+	pub fn is_lured(&self) -> bool {
+		self.lured
+	}
+
 	/// Advance the missile by `dt` seconds, and return whether its fuse fires now.
 	///
-	/// The missile turns toward the place where its target will be. The fuse fires when the path
-	/// of this step passes near a plane that can be hit, apart from the shooter.
-	pub(crate) fn step(&mut self, planes: &[(PlaneId, PlaneState)], dt: f32) -> bool {
+	/// The missile turns toward the place where its target will be. A flare of the target that
+	/// its seeker sees takes the place of the target, unless the missile is already too near.
+	/// The fuse fires when the path of this step passes near a plane that can be hit, apart from
+	/// the shooter, when the missile reaches the flare that it follows, and when it touches the terrain.
+	pub(crate) fn step(&mut self, planes: &[(PlaneId, PlaneState)], flares: &[Flare], dt: f32) -> bool {
 		self.speed = (self.speed + tuning::MISSILE_THRUST * dt).min(tuning::MISSILE_SPEED);
 		let target = planes
 			.iter()
 			.find(|(id, state)| *id == self.target && state.alive)
 			.map(|(_, state)| state);
-		if let Some(target) = target.filter(|_| self.seeking) {
-			let sight = target.position - self.position;
-			if self.direction.angle_between(sight) > tuning::SEEKER_CONE {
-				self.seeking = false;
-			} else {
-				// The missile flies ahead of its target, but never so far ahead that its own
-				// seeker loses the target.
-				let lead = sight + target.velocity() * (sight.length() / self.speed);
-				let most = (tuning::SEEKER_CONE * tuning::SEEKER_LEAD - self.direction.angle_between(sight)).max(0.0);
-				let wanted = limit_angle(sight, lead, sight.angle_between(lead).min(most));
-				self.turn_toward(wanted, tuning::MISSILE_TURN_RATE * dt);
+		let mut at_flare = false;
+		if self.seeking {
+			let sees = |place: Vec3| self.direction.angle_between(place - self.position) <= tuning::SEEKER_CONE;
+			let in_time = self.lured
+				|| target.is_some_and(|target| target.position.distance(self.position) > tuning::FLARE_MIN_DISTANCE);
+			let flare = flares
+				.iter()
+				.filter(|flare| flare.owner == self.target && in_time && sees(flare.position))
+				.min_by(|a, b| {
+					a.position
+						.distance(self.position)
+						.total_cmp(&b.position.distance(self.position))
+				});
+			// What the seeker follows: a flare before the plane, with the place and the velocity of each.
+			let followed = match (flare, target) {
+				(Some(flare), _) => Some((flare.position, flare.velocity)),
+				(None, Some(target)) if !self.lured && sees(target.position) => {
+					Some((target.position, target.velocity()))
+				}
+				_ => None,
+			};
+			self.lured |= flare.is_some();
+			at_flare = flare
+				.is_some_and(|flare| flare.position.distance(self.position) <= tuning::MISSILE_FUSE + self.speed * dt);
+			match followed {
+				Some((place, velocity)) => {
+					// The missile flies ahead of what it follows, but never so far ahead that
+					// its own seeker loses it.
+					let sight = place - self.position;
+					let lead = sight + velocity * (sight.length() / self.speed);
+					let most =
+						(tuning::SEEKER_CONE * tuning::SEEKER_LEAD - self.direction.angle_between(sight)).max(0.0);
+					let wanted = limit_angle(sight, lead, sight.angle_between(lead).min(most));
+					self.turn_toward(wanted, tuning::MISSILE_TURN_RATE * dt);
+				}
+				None => self.seeking = false,
 			}
 		}
 		let path = self.direction * self.speed * dt;
 		let from = self.position;
 		self.position += path;
 		self.fuel -= dt;
-		planes
+		let near_plane = planes
 			.iter()
 			.filter(|(id, state)| *id != self.shooter && state.can_be_hit())
 			.any(|(_, state)| {
@@ -102,7 +139,8 @@ impl Missile {
 				let to_plane = state.position - from;
 				let nearest = (to_plane.dot(path) / path.length_squared().max(1e-6)).clamp(0.0, 1.0);
 				(to_plane - path * nearest).length() <= tuning::MISSILE_FUSE
-			})
+			});
+		near_plane || at_flare || arena::touches_terrain(self.position, 0.0)
 	}
 
 	fn turn_toward(&mut self, wanted: Vec3, limit: f32) {
@@ -234,5 +272,82 @@ fn limit_angle(from: Vec3, wanted: Vec3, limit: f32) -> Vec3 {
 		wanted
 	} else {
 		from.normalize().slerp(wanted.normalize(), limit / angle)
+	}
+}
+
+/// A flare that burns behind the plane that released it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Flare {
+	/// The position in the world, in metres.
+	pub position: Vec3,
+	/// The velocity in the world, in m/s.
+	pub velocity: Vec3,
+	/// The plane that released the flare.
+	pub owner: PlaneId,
+	life: f32,
+}
+
+impl Flare {
+	pub(crate) fn new(owner: PlaneId, position: Vec3, velocity: Vec3) -> Self {
+		Self {
+			position,
+			velocity,
+			owner,
+			life: tuning::FLARE_SECONDS,
+		}
+	}
+
+	/// Move the flare by `dt` seconds: it slows down, and it falls.
+	pub(crate) fn step(&mut self, dt: f32) {
+		self.velocity *= (1.0 - tuning::FLARE_DRAG * dt).max(0.0);
+		self.velocity.y -= tuning::FLARE_FALL * dt;
+		self.position += self.velocity * dt;
+		self.life -= dt;
+	}
+
+	pub(crate) fn is_spent(&self) -> bool {
+		self.life <= 0.0 || arena::touches_terrain(self.position, 0.0)
+	}
+}
+
+/// The flares of one plane.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FlareRack {
+	ready: u8,
+	reload: f32,
+	wait: f32,
+}
+
+impl Default for FlareRack {
+	fn default() -> Self {
+		Self {
+			ready: tuning::FLARES,
+			reload: 0.0,
+			wait: 0.0,
+		}
+	}
+}
+
+impl FlareRack {
+	/// Return the number of flares that are ready.
+	pub(crate) fn ready(&self) -> u8 {
+		self.ready
+	}
+
+	/// Advance the rack by `dt` seconds, and return whether it releases a flare now.
+	pub(crate) fn step(&mut self, release: bool, dt: f32) -> bool {
+		self.wait = (self.wait - dt).max(0.0);
+		if self.ready < tuning::FLARES {
+			self.reload += dt;
+			if self.reload >= tuning::FLARE_RELOAD {
+				(self.ready, self.reload) = (self.ready + 1, 0.0);
+			}
+		}
+		if !release || self.ready == 0 || self.wait > 0.0 {
+			return false;
+		}
+		self.ready -= 1;
+		self.wait = tuning::FLARE_INTERVAL;
+		true
 	}
 }
