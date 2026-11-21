@@ -229,7 +229,14 @@ pub fn set_rows(id: &str, row_tag: &str, rows: &[(&str, Vec<Piece>)]) {
 			for (name, value) in piece.attributes {
 				let _ = child.set_attribute(name, value);
 			}
-			let _ = row.append_child(&child);
+			// A table row holds only cells, so any other piece in a row gets a cell around it.
+			if row_tag == "tr" && !matches!(piece.tag, "td" | "th") {
+				let cell = document.create_element("td").expect("a cell tag is a valid name");
+				let _ = cell.append_child(&child);
+				let _ = row.append_child(&cell);
+			} else {
+				let _ = row.append_child(&child);
+			}
 		}
 		let _ = parent.append_child(&row);
 	}

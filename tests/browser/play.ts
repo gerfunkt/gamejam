@@ -17,6 +17,8 @@ interface Player {
 	page: Page;
 	stats: Stat[];
 	errors: string[];
+	/** The line in which the engine names the graphics adapter that it uses. */
+	adapter: string;
 }
 
 const failures: string[] = [];
@@ -29,10 +31,12 @@ function check(condition: boolean, message: string): void {
 /** Opens the game with the given hooks in its address, and waits for the menu. */
 async function open(context: BrowserContext, label: string, hooks: string): Promise<Player> {
 	const page = await context.newPage();
-	const player: Player = { page, stats: [], errors: [] };
+	const player: Player = { page, stats: [], errors: [], adapter: "" };
 	page.on("console", (message) => {
 		const text = message.text();
-		if (text.startsWith("STAT ")) {
+		if (text.includes("AdapterInfo")) {
+			player.adapter = text;
+		} else if (text.startsWith("STAT ")) {
 			const stat = Object.fromEntries(text.slice(5).split(" ").map((pair) => pair.split("=") as [string, string]));
 			player.stats.push(stat);
 			console.log(`[${label}] ${text}`);
@@ -91,6 +95,8 @@ const scenarios: Record<string, (browser: Browser) => Promise<void>> = {
 		await shot(player, "solo");
 
 		const stat = last(player);
+		const backend = /backend: (\w+)/.exec(player.adapter)?.[1] ?? "none named";
+		check(backend === "BrowserWebGpu", `the engine draws with WebGPU (${backend})`);
 		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
 		check(stat.screen === "Playing", `the match runs (${stat.screen})`);
 		check(stat.planes === "4", `the player and three bots fly (${stat.planes})`);
@@ -99,6 +105,31 @@ const scenarios: Record<string, (browser: Browser) => Promise<void>> = {
 		check(Number(stat.hits_sent) > 0, `the bot that flies the player hits (${stat.hits_sent})`);
 	},
 };
+
+Object.assign(scenarios, {
+	/** A solo match on the client for browsers without WebGPU, which the address forces here. */
+	async fallback(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+		const player = await open(context, "fallback", "pilot=bot&backend=webgl2");
+		check(await player.page.locator("#fallback").isVisible(), "the menu warns that the graphics run slower");
+		await shot(player, "fallback-menu");
+		await player.page.getByRole("button", { name: "Fly Solo" }).click();
+		await chooseBots(player.page, 3, "Veteran");
+		await player.page.getByRole("button", { name: "Start Match" }).click();
+		await player.page.locator("#hud").waitFor({ state: "visible" });
+		await player.page.waitForTimeout(30_000);
+		await shot(player, "fallback");
+
+		const stat = last(player);
+		const backend = /backend: (\w+)/.exec(player.adapter)?.[1] ?? "none named";
+		check(backend === "Gl", `the engine draws with WebGL2 (${backend})`);
+		check(stat.backend === "webgl2", `the page loaded the WebGL2 client (${stat.backend})`);
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+		check(stat.planes === "4", `the player and three bots fly (${stat.planes})`);
+		check(Number(stat.fps) >= 30, `the page draws at least 30 frames a second (${stat.fps})`);
+		check(Number(stat.kills) > 0, `planes are destroyed in 30 s (${stat.kills})`);
+	},
+});
 
 /** Lets a player enter a name, and open the room list. */
 async function findRooms(player: Player, name: string): Promise<void> {
@@ -174,6 +205,143 @@ Object.assign(scenarios, {
 		await host.page.waitForTimeout(2_500);
 		const kills = players.map((player) => last(player).kills);
 		check(Number(kills[0]) > 0 && kills.every((count) => count === kills[0]), `all pages counted the same kills (${kills.join(", ")})`);
+	},
+});
+
+/** Waits for the next line of numbers of a page, and returns it. */
+async function nextStat(player: Player): Promise<Stat> {
+	const seen = player.stats.length;
+	for (let waited = 0; waited < 60 && player.stats.length === seen; waited++) await player.page.waitForTimeout(100);
+	return last(player);
+}
+
+Object.assign(scenarios, {
+	/** A person at the mouse and the keys: steering, the throttle, the gun, the pause, and a changed key. */
+	async controls(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+		const player = await open(context, "controls", "");
+		const { page } = player;
+		await page.getByRole("button", { name: "Fly Solo" }).click();
+		await chooseBots(page, 0, "Rookie");
+		await page.getByRole("button", { name: "Start Match" }).click();
+		await page.locator("#hud").waitFor({ state: "visible" });
+
+		// A cursor at the centre flies straight, and a cursor to the right turns the plane to the right.
+		await page.mouse.move(640, 360);
+		await page.waitForTimeout(1_000);
+		const straight = [Number((await nextStat(player)).heading), Number((await nextStat(player)).heading)];
+		check(Math.abs(straight[1] - straight[0]) < 3, `a cursor at the centre keeps the heading (${straight.join(" to ")} degrees)`);
+		// A cursor a little right of the centre gives a gentle turn, which the numbers can follow.
+		await page.mouse.move(720, 360);
+		await nextStat(player);
+		const turned = Number((await nextStat(player)).heading);
+		const right = ((turned - straight[1] + 540) % 360) - 180;
+		check(right > 8 && right < 150, `a cursor right of the centre turns the plane to the right (${right.toFixed(0)} degrees in 2 to 4 s)`);
+		await page.mouse.move(640, 360);
+
+		// The wheel sets the throttle, and the left button fires the gun.
+		const before = Number((await nextStat(player)).throttle);
+		await page.mouse.wheel(0, -300);
+		await page.mouse.down();
+		const firing = await nextStat(player);
+		await page.mouse.up();
+		check(Number(firing.throttle) > before, `the wheel opens the throttle (${before} to ${firing.throttle})`);
+		check(Number(firing.bullets) > 0, `the left button fires the gun (${firing.bullets} bullets fly)`);
+
+		// The pause key stops a solo match, and "Resume" continues it.
+		await page.keyboard.press("Escape");
+		await page.locator("#pause").waitFor({ state: "visible" });
+		await nextStat(player);
+		const paused = [await nextStat(player), await nextStat(player)];
+		check(paused[1].screen === "Paused" && paused[0].z === paused[1].z, `the plane waits while the menu is open (z ${paused[0].z} and ${paused[1].z})`);
+
+		// A key changes in the settings, and the new key works.
+		await page.getByRole("button", { name: "Settings" }).click();
+		const boost = page.locator("#binding-rows tr", { hasText: "Boost" }).getByRole("button");
+		const shows = (text: string) => boost.filter({ hasText: text }).waitFor({ timeout: 3_000 }).catch(() => {});
+		await boost.click();
+		await shows("Press a Key");
+		await page.keyboard.press("KeyB");
+		await shows("B");
+		check((await boost.textContent()) === "B", `the settings show the new key (${await boost.textContent()})`);
+		await page.getByRole("button", { name: "Back" }).click();
+		await page.getByRole("button", { name: "Resume" }).click();
+		await page.locator("#pause").waitFor({ state: "hidden" });
+		const resumed = await nextStat(player);
+		check(resumed.screen === "Playing" && resumed.z !== paused[1].z, `the match runs again after the pause (z ${resumed.z})`);
+		await page.keyboard.down("KeyB");
+		await nextStat(player);
+		const boosted = Number((await nextStat(player)).speed);
+		await page.keyboard.up("KeyB");
+		check(boosted > 125, `the new boost key gives speed (${boosted} m/s)`);
+
+		// The choice survives a new visit.
+		await page.reload();
+		await page.locator("#menu").waitFor({ state: "visible", timeout: 90_000 });
+		await page.getByRole("button", { name: "Settings" }).click();
+		const kept = await page.locator("#binding-rows tr", { hasText: "Boost" }).getByRole("button").textContent();
+		check(kept === "B", `the key is still there after a reload (${kept})`);
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+		await shot(player, "settings");
+	},
+
+	/** The lobby of a room: its name, the removal of a player, and a host that leaves during a match. */
+	async lobby(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 960, height: 540 } });
+		const title = `Lobby ${Date.now() % 100000}`;
+		const host = await open(context, "host", "pilot=bot");
+		await findRooms(host, "Host");
+		await host.page.locator("#room-title").fill(title);
+		await host.page.getByRole("button", { name: "Create Room" }).click();
+		await host.page.locator("#lobby").waitFor({ state: "visible" });
+		await chooseBots(host.page, 2, "Pilot");
+		const join = async (name: string, room: string): Promise<Player> => {
+			const guest = await open(context, name, "pilot=bot");
+			await findRooms(guest, name);
+			await guest.page.locator("#room-list li", { hasText: room }).getByRole("button", { name: "Join Room" }).click();
+			await guest.page.locator("#lobby").waitFor({ state: "visible" });
+			return guest;
+		};
+		const second = await join("Second", title);
+		const third = await join("Third", title);
+
+		// The host renames the room. The members and the room list show the new name.
+		const renamed = `${title} B`;
+		await host.page.locator("#new-title").fill(renamed);
+		await host.page.getByRole("button", { name: "Rename Room" }).click();
+		await second.page.waitForFunction((want) => document.querySelector("#lobby-title")?.textContent === want, renamed, { timeout: 5_000 }).catch(() => {});
+		check((await second.page.locator("#lobby-title").textContent()) === renamed, "a guest sees the new name of the room");
+		const watcher = await open(context, "watcher", "");
+		await findRooms(watcher, "Watcher");
+		const entry = watcher.page.locator("#room-list li", { hasText: renamed });
+		await entry.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+		const listed = (await entry.textContent().catch(() => "")) ?? "";
+		check(listed.includes("3 of 16") && listed.includes("In the lobby, 2 bots (Pilot)"), `the room list shows the room, its players, and what it does (${listed})`);
+		check(await second.page.locator("#rename").isHidden(), "a guest cannot rename the room");
+
+		// The host removes the third player, who learns why.
+		const row = host.page.locator("#players li", { hasText: "Third" });
+		await row.getByRole("button", { name: "Remove Player" }).click();
+		await row.getByRole("button", { name: "Confirm Removal" }).click();
+		await third.page.locator("#lost").waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+		const reason = (await third.page.locator("#lost-note").textContent()) ?? "";
+		check(reason.includes("The host removed you"), `the removed player learns why (${reason})`);
+		await host.page.waitForFunction(() => document.querySelectorAll("#players li").length === 2);
+
+		// The host leaves during a match. The second player hosts on, and flies the bots.
+		await host.page.getByRole("button", { name: "Start Match" }).click();
+		await second.page.locator("#hud").waitFor({ state: "visible" });
+		await second.page.waitForTimeout(6_000);
+		check(last(second).host === "false" && last(second).planes === "4", `the guest sees two players and two bots (${last(second).planes})`);
+		await host.page.close();
+		await second.page.waitForTimeout(6_000);
+		const after = last(second);
+		check(after.host === "true", `the guest hosts the room after the host left (${after.host})`);
+		check(after.planes === "3" && after.screen === "Playing", `the match runs on with one player and two bots (${after.planes}, ${after.screen})`);
+		await second.page.keyboard.press("Escape");
+		check(await second.page.getByRole("button", { name: "End Match" }).isVisible(), "the new host can end the match");
+		check(second.errors.length === 0, `the new host reports no error (${second.errors.length})`);
+		await shot(second, "lobby-new-host");
 	},
 });
 

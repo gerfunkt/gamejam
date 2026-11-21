@@ -291,6 +291,13 @@ fn handle_page(mut game: ResMut<Game>) {
 	let game = &mut *game;
 	let now = page::now();
 	game.events.clear();
+	// The clicks come first: a click on a key in the settings must count before the key that follows it.
+	for event in page::take_ui_events() {
+		match event {
+			UiEvent::Action { action, value } => game.act(&action, &value, now),
+			UiEvent::Change { id, value } => game.change(&id, &value),
+		}
+	}
 	for code in input::take_pressed() {
 		if let Some(bind) = game.binding.take() {
 			// The pause key leaves the choice of a key, so it cannot be given to another action here.
@@ -308,12 +315,6 @@ fn handle_page(mut game: ResMut<Game>) {
 	}
 	if input::take_left_page() && game.screen == Screen::Playing && !game.bot_pilot {
 		game.screen = Screen::Paused;
-	}
-	for event in page::take_ui_events() {
-		match event {
-			UiEvent::Action { action, value } => game.act(&action, &value, now),
-			UiEvent::Change { id, value } => game.change(&id, &value),
-		}
 	}
 }
 
@@ -435,17 +436,26 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 		return;
 	}
 	let stats = &game.stats;
-	let planes = game
-		.session
-		.as_ref()
-		.and_then(Session::game)
-		.map_or(0, |running| running.planes().len());
+	let running = game.session.as_ref().and_then(Session::game);
+	let planes = running.map_or(0, |running| running.planes().len());
+	let bullets = running.map_or(0, |running| running.bullets().len());
 	let (players, host) = game
 		.session
 		.as_ref()
 		.map_or((0, false), |session| (session.players().len(), session.is_host()));
+	// The flight of the player: the place, the heading in degrees east of north, and the speed.
+	let flight = running
+		.and_then(|running| running.plane(running.me()))
+		.map_or(String::new(), |plane| {
+			let (place, nose) = (plane.position, plane.forward());
+			let heading = nose.x.atan2(-nose.z).to_degrees();
+			format!(
+				" x={:.0} y={:.0} z={:.0} heading={heading:.0} speed={:.0}",
+				place.x, place.y, place.z, plane.speed
+			)
+		});
 	page::log(&format!(
-		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={}",
+		"STAT screen={:?} backend={} fps={:.0} planes={planes} players={players} host={host} kills={} hits_sent={} hits_taken={} bursts={} bullets={bullets} throttle={:.2}{flight}",
 		game.screen,
 		page::backend(),
 		stats.frames as f32 / stats.since_line,
@@ -453,6 +463,7 @@ fn log_stats(mut game: ResMut<Game>, time: Res<Time>) {
 		stats.hits_sent,
 		stats.hits_taken,
 		stats.bursts,
+		game.throttle,
 	));
 	(game.stats.frames, game.stats.since_line) = (0, 0.0);
 }
