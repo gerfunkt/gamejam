@@ -7,18 +7,17 @@
 //! The bus never waits for a member. Each member has a queue of [`QUEUE_FRAMES`] frames, and a
 //! room puts each frame into the queue of every member while it holds the lock of the bus, which
 //! gives all members one order. A member whose queue is full is removed from its room, and its
-//! connection closes with the code 1008. A member whose socket accepts no frame for
+//! connection closes with the code 4004. A member whose socket accepts no frame for
 //! [`WRITE_TIMEOUT`] loses its connection too. The other members see neither delay.
 
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use sim::room::{
-	CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_TITLE, RoomEntry, RoomStatus,
-	clean_info, clean_title, frame,
+	CloseCode, Control, Join, MAX_MEMBERS, MAX_MESSAGE_BYTES, MAX_ROOMS, OPEN_ROOM_ID, OPEN_ROOM_TITLE, RoomEntry,
+	RoomStatus, clean_info, clean_title, frame,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
@@ -36,8 +35,6 @@ const QUEUE_FRAMES: usize = 1024;
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long a closing connection waits for the answer of the peer.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
-/// The close code of a member that fell too far behind: "policy violation".
-const TOO_SLOW: u16 = 1008;
 
 /// Return the settings of every WebSocket of the bus.
 ///
@@ -67,7 +64,7 @@ impl Bus {
 	#[must_use]
 	pub fn new() -> Self {
 		let open = Room {
-			id: 0,
+			id: OPEN_ROOM_ID.to_owned(),
 			title: OPEN_ROOM_TITLE.to_owned(),
 			info: String::new(),
 			members: Vec::new(),
@@ -76,7 +73,7 @@ impl Bus {
 			state: Arc::new(Mutex::new(State {
 				next_player: 1,
 				next_room: 1,
-				rooms: BTreeMap::from([(0, open)]),
+				rooms: vec![open],
 			})),
 		}
 	}
@@ -84,7 +81,7 @@ impl Bus {
 	/// Return the rooms in the order of creation.
 	#[must_use]
 	pub fn rooms(&self) -> Vec<RoomEntry> {
-		self.lock().rooms.values().map(Room::entry).collect()
+		self.lock().rooms.iter().map(Room::entry).collect()
 	}
 
 	/// Serve one member until its connection ends.
@@ -97,15 +94,15 @@ impl Bus {
 		let (room, number, mut queue) = match self.enter(join) {
 			Ok(entry) => entry,
 			Err(code) => {
-				finish(&mut ws, close_frame(code.code(), code.reason())).await;
+				finish(&mut ws, close_frame(code)).await;
 				return;
 			}
 		};
 		loop {
 			tokio::select! {
 				incoming = ws.next() => match incoming {
-					Some(Ok(Message::Binary(message))) => self.relay(room, number, &message),
-					Some(Ok(Message::Text(text))) => self.control(room, number, &text),
+					Some(Ok(Message::Binary(message))) => self.relay(&room, number, &message),
+					Some(Ok(Message::Text(text))) => self.control(&room, number, &text),
 					Some(Ok(Message::Close(_)) | Err(_)) | None => break,
 					Some(Ok(_)) => {}
 				},
@@ -120,13 +117,13 @@ impl Bus {
 						}
 					}
 					None => {
-						finish(&mut ws, close_frame(TOO_SLOW, "too slow")).await;
+						finish(&mut ws, close_frame(CloseCode::FellBehind)).await;
 						break;
 					}
 				},
 			}
 		}
-		self.leave(room, number);
+		self.leave(&room, number);
 	}
 
 	fn lock(&self) -> MutexGuard<'_, State> {
@@ -134,105 +131,117 @@ impl Bus {
 		self.state.lock().unwrap_or_else(PoisonError::into_inner)
 	}
 
-	/// Add a member to the room that `join` names, and tell the room.
-	fn enter(&self, join: Join) -> Result<(u32, u32, mpsc::Receiver<Message>), CloseCode> {
+	/// Run `act` on the room with `id`, and remove the rooms that it left empty if it says that
+	/// a member left.
+	fn with_room(&self, id: &str, act: impl FnOnce(&mut Room) -> bool) {
 		let mut state = self.lock();
-		let id = match join {
-			Join::Open => 0,
-			Join::Room(id) => {
-				let known = id.parse().ok().filter(|number: &u32| number.to_string() == id);
-				known
-					.filter(|number| state.rooms.contains_key(number))
-					.ok_or(CloseCode::NoSuchRoom)?
-			}
+		if let Some(room) = state.rooms.iter_mut().find(|room| room.id == id)
+			&& act(room)
+		{
+			state.tidy();
+		}
+	}
+
+	/// Add a member to the room that `join` names, and tell the room.
+	fn enter(&self, join: Join) -> Result<(String, u32, mpsc::Receiver<Message>), CloseCode> {
+		let state = &mut *self.lock();
+		let position = match join {
+			Join::Open => state.rooms.iter().position(|room| room.id == OPEN_ROOM_ID),
+			Join::Room(id) => state.rooms.iter().position(|room| room.id == id),
 			Join::Create(title) => {
 				if state.rooms.len() >= MAX_ROOMS {
 					return Err(CloseCode::TooManyRooms);
 				}
-				let id = state.next_room;
+				let id = state.next_room.to_string();
 				state.next_room += 1;
-				let title = clean_title(&title, &id.to_string());
-				state.rooms.insert(
+				state.rooms.push(Room {
+					title: clean_title(&title, &id),
 					id,
-					Room {
-						id,
-						title,
-						info: String::new(),
-						members: Vec::new(),
-					},
-				);
-				id
+					info: String::new(),
+					members: Vec::new(),
+				});
+				Some(state.rooms.len() - 1)
 			}
 		};
-		let number = state.next_player;
-		let room = state.rooms.get_mut(&id).expect("the room was found or made above");
+		let room = position
+			.map(|position| &mut state.rooms[position])
+			.ok_or(CloseCode::NoSuchRoom)?;
 		if room.members.len() >= MAX_MEMBERS {
 			return Err(CloseCode::RoomFull);
 		}
+		let number = state.next_player;
 		state.next_player += 1;
 		let (queue, receiver) = mpsc::channel(QUEUE_FRAMES);
-		let room = state.rooms.get_mut(&id).expect("the room was found or made above");
 		room.members.push(Member { number, queue });
+		// A room that was just joined is not empty, so nothing to tidy even if the status removed a member.
 		room.announce();
-		state.tidy();
-		Ok((id, number, receiver))
+		Ok((room.id.clone(), number, receiver))
 	}
 
 	/// Send a binary message of a member to the whole room, the sender included.
-	fn relay(&self, room: u32, sender: u32, message: &[u8]) {
+	fn relay(&self, room: &str, sender: u32, message: &[u8]) {
 		if message.len() > MAX_MESSAGE_BYTES {
 			return;
 		}
-		let mut state = self.lock();
-		if let Some(room) = state.rooms.get_mut(&room).filter(|room| room.has(sender)) {
+		self.with_room(room, |room| {
+			if !room.has(sender) {
+				return false;
+			}
 			let framed = Bytes::from(frame(sender, message));
-			if room.send_all(|_| Message::Binary(framed.clone())) {
+			let left = room.send_all(|_| Message::Binary(framed.clone()));
+			if left {
 				room.announce();
 			}
-		}
-		state.tidy();
+			left
+		});
 	}
 
 	/// Apply a request of a member, if it came from the owner.
-	fn control(&self, room: u32, sender: u32, text: &str) {
+	fn control(&self, room: &str, sender: u32, text: &str) {
 		let Some(request) = Control::parse_frame(text) else {
 			return;
 		};
-		let mut state = self.lock();
-		if let Some(room) = state.rooms.get_mut(&room).filter(|room| room.owner() == Some(sender)) {
+		self.with_room(room, |room| {
+			if room.owner() != Some(sender) {
+				return false;
+			}
 			match request {
-				Control::Info(text) => room.info = clean_info(&text),
+				Control::Info(text) => {
+					room.info = clean_info(&text);
+					false
+				}
 				Control::Title(text) => {
-					let title = clean_title(&text, &room.id.to_string());
-					if title != room.title {
-						room.title = title;
-						room.announce();
+					let title = clean_title(&text, &room.id);
+					if title == room.title {
+						return false;
 					}
+					room.title = title;
+					room.announce()
 				}
 				Control::Kick(number) => {
-					if let Some(position) = room.members.iter().position(|member| member.number == number) {
-						let removed = room.members.remove(position);
-						// A full queue loses this frame, and the member then gets the code of a slow one.
-						let _ = removed.queue.try_send(Message::Close(close_frame(
-							CloseCode::Removed.code(),
-							CloseCode::Removed.reason(),
-						)));
-						room.announce();
-					}
+					let Some(position) = room.members.iter().position(|member| member.number == number) else {
+						return false;
+					};
+					let removed = room.members.remove(position);
+					// A full queue loses this frame, and the member then gets the code of a slow one.
+					let _ = removed.queue.try_send(Message::Close(close_frame(CloseCode::Removed)));
+					room.announce();
+					true
 				}
 			}
-		}
-		state.tidy();
+		});
 	}
 
 	/// Remove a member whose connection ended, and tell the room.
-	fn leave(&self, room: u32, number: u32) {
-		let mut state = self.lock();
-		if let Some(room) = state.rooms.get_mut(&room).filter(|room| room.has(number)) {
-			room.members.retain(|member| member.number != number);
-			room.announce();
-		}
-		state.tidy();
+	fn leave(&self, room: &str, number: u32) {
+		self.with_room(room, |room| {
+			let present = room.has(number);
+			if present {
+				room.members.retain(|member| member.number != number);
+				room.announce();
+			}
+			present
+		});
 	}
 }
 
@@ -242,20 +251,21 @@ struct State {
 	next_player: u32,
 	/// The id of the next room. Ids count up and no id returns.
 	next_room: u32,
-	/// The rooms by id, which is the order of creation.
-	rooms: BTreeMap<u32, Room>,
+	/// The rooms in the order of creation.
+	rooms: Vec<Room>,
 }
 
 impl State {
 	/// Remove the rooms that no member is left in, except the open room.
 	fn tidy(&mut self) {
-		self.rooms.retain(|id, room| *id == 0 || !room.members.is_empty());
+		self.rooms
+			.retain(|room| room.id == OPEN_ROOM_ID || !room.members.is_empty());
 	}
 }
 
 #[derive(Debug)]
 struct Room {
-	id: u32,
+	id: String,
 	title: String,
 	info: String,
 	/// The members in the order in which they joined.
@@ -280,7 +290,7 @@ impl Room {
 
 	fn entry(&self) -> RoomEntry {
 		RoomEntry {
-			id: self.id.to_string(),
+			id: self.id.clone(),
 			title: self.title.clone(),
 			members: self.members.len(),
 			owner: self.owner(),
@@ -298,39 +308,29 @@ impl Room {
 	}
 
 	/// Tell every member the state of the room. A member that cannot take it is removed, and the
-	/// rest hear of that too.
-	fn announce(&mut self) {
+	/// rest hear of that too. Return whether it removed a member.
+	fn announce(&mut self) -> bool {
+		let mut removed = false;
 		loop {
-			let status = |you| RoomStatus {
-				id: self.id.to_string(),
+			let status = RoomStatus {
+				id: self.id.clone(),
 				title: self.title.clone(),
-				owner: self.owner().unwrap_or(you),
+				owner: self.owner().unwrap_or_default(),
 				members: self.members.iter().map(|member| member.number).collect(),
-				you,
+				you: 0,
 			};
-			let frames: Vec<(u32, Message)> = self
-				.members
-				.iter()
-				.map(|member| (member.number, Message::text(status(member.number).to_frame())))
-				.collect();
-			let removed = self.send_all(|you| {
-				frames
-					.iter()
-					.find(|(number, _)| *number == you)
-					.map(|(_, frame)| frame.clone())
-					.expect("a frame for each member")
-			});
-			if !removed {
-				break;
+			if !self.send_all(|you| Message::text(RoomStatus { you, ..status.clone() }.to_frame())) {
+				return removed;
 			}
+			removed = true;
 		}
 	}
 }
 
-fn close_frame(code: u16, reason: &'static str) -> Option<CloseFrame> {
+fn close_frame(code: CloseCode) -> Option<CloseFrame> {
 	Some(CloseFrame {
-		code: WsCloseCode::from(code),
-		reason: reason.into(),
+		code: WsCloseCode::from(code.code()),
+		reason: code.reason().into(),
 	})
 }
 
@@ -763,6 +763,6 @@ mod tests {
 		}
 		sender.await.expect("the sender task must finish");
 		assert_eq!(bus.rooms()[0].members, 1, "the member that fell behind was removed");
-		assert_eq!(slow.close_code().await, 1008, "it learns why, when it reads again");
+		assert_eq!(slow.close_code().await, 4004, "it learns why, when it reads again");
 	}
 }
