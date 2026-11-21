@@ -17,7 +17,7 @@
 			<div id="lock-box" class="mark" aria-hidden="true" hidden></div>
 			<div id="markers" aria-hidden="true"></div>
 			<ul id="feed" aria-live="polite"></ul>
-			<table id="scores" aria-label="Scores"><tbody></tbody></table>
+			<table id="scores" aria-label="Scores"><tbody id="score-rows"></tbody></table>
 			<p id="alert" role="status" aria-live="assertive"></p>
 			<div id="gauges">
 				<dl id="parts"></dl>
@@ -98,7 +98,7 @@
 			<section id="settings" class="screen" aria-labelledby="settings-title" hidden>
 				<h2 id="settings-title">Settings</h2>
 				<p>The plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. Select a key to change it.</p>
-				<table id="bindings" aria-label="Keys"><tbody></tbody></table>
+				<table id="bindings" aria-label="Keys"><tbody id="binding-rows"></tbody></table>
 				<p id="bind-note" role="status" aria-live="polite"></p>
 				<label for="sensitivity">Mouse Sensitivity</label>
 				<input id="sensitivity" name="sensitivity" type="range" min="0.4" max="2" step="0.1">
@@ -124,7 +124,7 @@
 				<h2 id="results-title">Results</h2>
 				<table id="result-table">
 					<thead><tr><th scope="col">Pilot</th><th scope="col">Kills</th><th scope="col">Losses</th></tr></thead>
-					<tbody></tbody>
+					<tbody id="result-rows"></tbody>
 				</table>
 				<div class="row"><button type="button" data-action="close-results">Back to the Lobby</button></div>
 			</section>

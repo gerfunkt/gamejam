@@ -132,7 +132,7 @@ fn show_screens(game: Res<Game>) {
 					("", vec![cell(score.name.as_str()), cell(kills), cell(deaths)])
 				})
 				.collect();
-			page::set_rows("result-table", "tr", &rows);
+			page::set_rows("result-rows", "tr", &rows);
 		}
 		Screen::Lost => page::set_text("lost-note", &game.lost),
 		Screen::Playing => {}
@@ -342,7 +342,7 @@ fn show_settings(game: &Game) {
 			)
 		})
 		.collect();
-	page::set_rows("bindings", "tr", &rows);
+	page::set_rows("binding-rows", "tr", &rows);
 	let note = match game.binding {
 		Some(bind) => format!(
 			"Press the new key for “{}”. The pause key leaves the old key.",
@@ -551,5 +551,5 @@ fn show_display(
 			)
 		})
 		.collect();
-	page::set_rows("scores", "tr", &rows);
+	page::set_rows("score-rows", "tr", &rows);
 }

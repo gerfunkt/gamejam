@@ -100,6 +100,83 @@ const scenarios: Record<string, (browser: Browser) => Promise<void>> = {
 	},
 };
 
+/** Lets a player enter a name, and open the room list. */
+async function findRooms(player: Player, name: string): Promise<void> {
+	await player.page.locator("#name").fill(name);
+	await player.page.getByRole("button", { name: "Find a Room" }).click();
+	await player.page.locator("#rooms").waitFor({ state: "visible" });
+}
+
+/** The names in the lobby of a player, as the page lists them. */
+async function lobbyNames(player: Player): Promise<string[]> {
+	return player.page.locator("#players .name").allTextContents();
+}
+
+Object.assign(scenarios, {
+	/** Three players in one room, with two bots that the host flies. Bots fly all three players. */
+	async online(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 960, height: 540 } });
+		const title = `Test ${Date.now() % 100000}`;
+		const host = await open(context, "host", "pilot=bot");
+		await findRooms(host, "Zoë");
+		await host.page.locator("#room-title").fill(title);
+		await host.page.getByRole("button", { name: "Create Room" }).click();
+		await host.page.locator("#lobby").waitFor({ state: "visible" });
+		await chooseBots(host.page, 2, "Veteran");
+
+		const guests: Player[] = [];
+		for (const name of ["Björn", "北"]) {
+			const guest = await open(context, name, "pilot=bot");
+			await findRooms(guest, name);
+			const room = guest.page.locator("#room-list li", { hasText: title });
+			await room.getByRole("button", { name: "Join Room" }).click();
+			await guest.page.locator("#lobby").waitFor({ state: "visible" });
+			guests.push(guest);
+		}
+		const players = [host, ...guests];
+		await host.page.waitForFunction(() => document.querySelectorAll("#players li").length === 3);
+		await guests[1].page.waitForFunction(() => document.querySelectorAll("#players li").length === 3);
+		// Each member announces its name when a player joins, so the names arrive a moment later.
+		const wanted = "Zoë (host)|Björn|北 (you)";
+		const listed = (text: string) => [...document.querySelectorAll("#players .name")].map((name) => name.textContent).join("|") === text;
+		await guests[1].page.waitForFunction(listed, wanted, { timeout: 5_000 }).catch(() => {});
+		const names = (await lobbyNames(guests[1])).join("|");
+		check(names === wanted, `the last guest sees the three names, with their accents (${names})`);
+		check(await guests[0].page.locator("#start").isHidden(), "a guest has no start button");
+		check((await guests[0].page.locator("#bots-count").textContent()) === "2", "a guest sees the bots of the host");
+		await shot(host, "online-lobby");
+
+		await host.page.getByRole("button", { name: "Start Match" }).click();
+		for (const player of players) await player.page.locator("#hud").waitFor({ state: "visible" });
+		await host.page.waitForTimeout(45_000);
+		await shot(guests[0], "online");
+
+		for (const player of players) {
+			const stat = last(player);
+			const label = player === host ? "the host" : "a guest";
+			check(player.errors.length === 0, `${label} reports no error (${player.errors.length})`);
+			check(stat.planes === "5", `${label} sees three players and two bots (${stat.planes})`);
+			check(Number(stat.fps) >= 45, `${label} draws at least 45 frames a second (${stat.fps})`);
+		}
+
+		// The host ends the match from the pause menu, and every player sees the same results.
+		await host.page.keyboard.press("Escape");
+		await host.page.getByRole("button", { name: "End Match" }).click();
+		await host.page.getByRole("button", { name: "Confirm: End Match" }).click();
+		const tables: string[] = [];
+		for (const player of players) {
+			await player.page.locator("#results").waitFor({ state: "visible" });
+			tables.push((await player.page.locator("#result-rows tr").allTextContents()).join("|"));
+		}
+		check(tables[0].includes("Zoë") && tables.every((table) => table === tables[0]), `all pages show the same results (${tables[0]})`);
+		await shot(guests[1], "online-results");
+		// The pages write their numbers at different moments, so they are compared after the last kill.
+		await host.page.waitForTimeout(2_500);
+		const kills = players.map((player) => last(player).kills);
+		check(Number(kills[0]) > 0 && kills.every((count) => count === kills[0]), `all pages counted the same kills (${kills.join(", ")})`);
+	},
+});
+
 const run = scenarios[scenario];
 if (!run) {
 	console.log(`Unknown scenario "${scenario}". The scenarios are: ${Object.keys(scenarios).join(", ")}.`);
