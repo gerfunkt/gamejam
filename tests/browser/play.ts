@@ -498,6 +498,8 @@ Object.assign(scenarios, {
 		await page.locator("#fullscreen-menu").click();
 		await page.waitForFunction(() => document.fullscreenElement !== null, null, { timeout: 3_000 }).catch(() => {});
 		check(await page.evaluate(() => document.fullscreenElement !== null), "the button of the entry screen switches to full screen");
+		// The page renames the button when the browser reports the switch, a moment after the switch.
+		await page.waitForFunction(() => document.querySelector("#fullscreen-menu")?.textContent === "Leave Full Screen", null, { timeout: 3_000 }).catch(() => {});
 		check((await page.locator("#fullscreen-menu").textContent()) === "Leave Full Screen", "the button then offers the way back");
 		await page.locator("#fullscreen-menu").click();
 		await page.waitForFunction(() => document.fullscreenElement === null, null, { timeout: 3_000 }).catch(() => {});
