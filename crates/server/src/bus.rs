@@ -393,7 +393,7 @@ mod tests {
 	use tokio_tungstenite::tungstenite::Message;
 	use tokio_tungstenite::tungstenite::protocol::Role;
 
-	use super::{Bus, QUEUE_FRAMES};
+	use super::{Bus, QUEUE_FRAMES, socket_config};
 
 	/// The client end of a member, with real WebSocket framing.
 	struct Client {
@@ -403,7 +403,7 @@ mod tests {
 	impl Client {
 		async fn join(bus: &Bus, join: Join) -> Self {
 			let (near, far) = tokio::io::duplex(1 << 16);
-			let server = WebSocketStream::from_raw_socket(far, Role::Server, None).await;
+			let server = WebSocketStream::from_raw_socket(far, Role::Server, Some(socket_config())).await;
 			let bus = bus.clone();
 			tokio::spawn(async move { bus.connect(server, join).await });
 			Self {
@@ -412,11 +412,21 @@ mod tests {
 		}
 
 		async fn next(&mut self) -> Message {
-			timeout(Duration::from_secs(5), self.ws.next())
-				.await
-				.expect("the bus must send a frame within five seconds")
-				.expect("the connection must stay open")
-				.expect("the frame must be valid")
+			self.next_within(Duration::from_secs(5)).await
+		}
+
+		/// Return the next frame that is not a ping or a pong. Reading also answers the pings.
+		async fn next_within(&mut self, limit: Duration) -> Message {
+			loop {
+				let frame = timeout(limit, self.ws.next())
+					.await
+					.expect("the bus must send a frame in time")
+					.expect("the connection must stay open")
+					.expect("the frame must be valid");
+				if !matches!(frame, Message::Ping(_) | Message::Pong(_)) {
+					return frame;
+				}
+			}
 		}
 
 		async fn status(&mut self) -> RoomStatus {
@@ -425,23 +435,7 @@ mod tests {
 				other => panic!("expected a room status, got {other:?}"),
 			}
 		}
-	}
 
-	#[tokio::test]
-	async fn a_player_without_a_query_joins_the_open_room() {
-		let bus = Bus::new();
-		let mut first = Client::join(&bus, Join::Open).await;
-		let status = first.status().await;
-		assert_eq!(status.id, OPEN_ROOM_ID, "the open room has its own id");
-		assert_eq!(status.title, "Open room");
-		assert_eq!(
-			(status.owner, status.members, status.you),
-			(1, vec![1], 1),
-			"player numbers count up from 1"
-		);
-	}
-
-	impl Client {
 		async fn send_binary(&mut self, message: &[u8]) {
 			self.ws
 				.send(Message::Binary(message.to_vec().into()))
@@ -474,6 +468,20 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[tokio::test]
+	async fn a_player_without_a_query_joins_the_open_room() {
+		let bus = Bus::new();
+		let mut first = Client::join(&bus, Join::Open).await;
+		let status = first.status().await;
+		assert_eq!(status.id, OPEN_ROOM_ID, "the open room has its own id");
+		assert_eq!(status.title, "Open room");
+		assert_eq!(
+			(status.owner, status.members, status.you),
+			(1, vec![1], 1),
+			"player numbers count up from 1"
+		);
 	}
 
 	async fn room_of(bus: &Bus, title: &str) -> (Client, String) {
