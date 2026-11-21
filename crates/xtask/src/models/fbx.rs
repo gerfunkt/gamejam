@@ -256,7 +256,7 @@ fn chunks<T, const N: usize>(data: &[u8], convert: fn([u8; N]) -> T) -> Vec<T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 
 	/// Encode a node record of version 7.4, the way an exporter does.

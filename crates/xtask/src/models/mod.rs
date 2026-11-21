@@ -2,3 +2,4 @@
 
 mod fbx;
 mod geometry;
+mod scene;
