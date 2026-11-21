@@ -241,7 +241,6 @@ mod tests {
 	use std::net::Ipv4Addr;
 	use std::sync::Arc;
 
-	use tokio::net::TcpListener;
 	use tokio_rustls::TlsAcceptor;
 
 	use crate::bus::Bus;
@@ -253,7 +252,7 @@ mod tests {
 		let directory = tempfile::tempdir().expect("a temporary directory");
 		let identity = Identity::load_or_create(directory.path(), &[Ipv4Addr::LOCALHOST]).expect("a certificate");
 		let acceptor = TlsAcceptor::from(Arc::new(identity.server_config().expect("a server config")));
-		let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.expect("a free port");
+		let listener = crate::test_port::bind().await;
 		let target = listener.local_addr().expect("an address").to_string();
 		tokio::spawn(Site::new("web".into(), Bus::new()).listen(listener, acceptor));
 		let report = super::run(&target, 17, 1).await.expect("the load test");

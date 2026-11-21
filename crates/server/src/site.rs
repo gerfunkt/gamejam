@@ -200,7 +200,7 @@ mod tests {
 	use rustls::{ClientConfig, RootCertStore};
 	use sim::room::{RoomStatus, parse_room_list};
 	use tokio::io::AsyncWriteExt;
-	use tokio::net::{TcpListener, TcpStream};
+	use tokio::net::TcpStream;
 	use tokio::time::timeout;
 	use tokio_rustls::{TlsAcceptor, TlsConnector};
 	use tokio_tungstenite::client_async;
@@ -286,7 +286,7 @@ mod tests {
 			roots.add(certificate.expect("a certificate")).expect("a trust anchor");
 		}
 		let acceptor = TlsAcceptor::from(Arc::new(identity.server_config().expect("a server config")));
-		let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.expect("a free port");
+		let listener = crate::test_port::bind().await;
 		let address = listener.local_addr().expect("an address");
 		tokio::spawn(site().with_max_connections(1).listen(listener, acceptor));
 		let connector = TlsConnector::from(Arc::new(
