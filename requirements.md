@@ -30,8 +30,10 @@ Each requirement has a standing:
 | P9 | A player can see a missile coming and escape it, and a new plane cannot be killed at once. | Proposed | Proven in part: bots escape and survive in automatic matches. No person has judged it. |
 | P10 | A plane carries flares. A flare draws a missile away from the plane. | Owner | Proven in the rules, and a browser test releases one |
 | P11 | Power-ups float in the air as icons. A plane that flies through one gets its help: more speed for a time, a refill of the weapons, or a repair. | Owner | Proven in the rules. No person has judged them in play. |
-| P12 | A pilot flies a better plane model as its kills rise. | Owner | Not proven: built with three models, at 0, 3, and 6 kills. No test shows the change. |
-| P13 | The ground is the terrain map of the owner, with its mountains, its canyon, and its crater. A plane that touches the terrain is destroyed, and a shot ends there. | Owner | Proven in the rules, and a browser match flies over it |
+| P12 | A pilot flies a better plane model as its kills rise. Each model has a name, the display shows the name of the own plane, and an upgrade shows clearly when it happens. | Owner | Proven in part: three models change at 0, 3, and 6 kills. The names and the notice are in work (issue 12c0876). |
+| P13 | The ground is the terrain map of the owner, with its mountains, its canyon, and its crater. A plane that touches the terrain is destroyed, and a shot ends there. The land continues beyond the map to the horizon. | Owner | Proven: the rules collide with the map, and browser matches show land out to the haze |
+| P14 | The edge of the arena is a transparent wall. It shows only near the plane of the player, and nothing else marks the edge. | Owner | Proven in part: pictures of a flight to the edge show it. No automatic test checks it. |
+| P15 | In the polish phase, what a player sees in the first three minutes of play comes first. | Owner | Noted |
 
 ## Controls
 
@@ -41,30 +43,33 @@ Each requirement has a standing:
 | C2 | On a desktop, only the mouse steers. No key steers the plane. | Owner | Proven. The keys that turned and pitched the plane were removed on 2026-11-21. |
 | C3 | The player can change each key in the settings. | Owner | Proven |
 | C4 | Steering works in every current browser of the players. | Owner's test | Proven. Steering that captures the mouse pointer was disqualified, because it failed in the owner's browser. |
-| C5 | A phone has its own controls, and it is held sideways. A stick or the gyroscope steers, and a button exists for every other control, so a phone needs no keyboard. The layout follows the common layouts of phone games. | Note 19, owner | Proven in part: a browser test with an emulated phone flies with the stick, the buttons, and the tilt. The owner reported that the buttons and the gyroscope failed on a real phone, and no real phone has run the new layout. |
+| C5 | A phone has its own controls, and it is held sideways. A stick or the gyroscope steers, and a button exists for every other control, so a phone needs no keyboard. The layout follows the common layouts of phone games. The tilt steers from the start. | Note 19, owner | Proven in part: a browser test with an emulated phone flies with the stick, the buttons, and the tilt. The owner reported that the buttons and the gyroscope failed on a real phone, and no real phone has run the new layout. |
 | C6 | The game is complete with the mouse and the keys on a desktop, and with touch on a phone. Each other input is optional. | Proposed | Proven on a desktop, and with an emulated phone |
 
 ## The screens
 
 | Id | Requirement | Source | Standing |
 |---|---|---|---|
-| D1 | The game can fill the screen, on a desktop and on a phone where the browser allows it. The entry screen offers full screen where the player sees it at once. | Owner | Proven in part: a browser test enters and leaves full screen from the pause menu. The offer on the entry screen is not built, and no real phone has shown it. |
-| D2 | The display in flight is full: the health of each part, the speed, the height, the throttle, the boost, the weapons, the heading, the target, a radar, markers on other planes, alerts, and the scores. | Owner | Proven in part: the screenshots of the tests show it. No person has judged it. |
-| D3 | The menu has a "How to Play" screen with a short text on the aim and the controls. | Owner | Not proven: built, and no test opens it |
-| D4 | The entry screen gives a short rundown of the features of the game. | Owner | Not proven: not built |
-| D5 | The page shows the progress of the load. When the game cannot start, the page says why and what to do. No device stays on the loading screen without a message. | Owner's report | Proven in part: a browser test loads the WebGL2 client and plays. The owner has not confirmed it on the devices that were stuck. |
+| D1 | The game can fill the screen, on a desktop and on a phone where the browser allows it. The entry screen offers full screen where the player sees it at once. | Owner | Proven in part: browser tests enter and leave full screen from the entry screen and from the pause menu. No real phone has shown it. |
+| D2 | The display in flight is full: the health of each part, the speed, the height, the throttle, the boost, the weapons, the heading, the target, a radar, markers on other planes, alerts, and the scores. The picture of the plane and the health of its parts are at the top left. | Owner | Proven in part: the browser tests check the place of the health, and the screenshots show the rest. No person has judged it. |
+| D3 | The menu has a "How to Play" screen with a short text on the aim and the controls. | Owner | Proven: a browser test opens it |
+| D4 | The entry screen gives a short rundown of the features of the game. | Owner | Proven: a browser test counts the features |
+| D5 | The page shows the progress of the load. When the game cannot start, the page says why and what to do. No device stays on the loading screen without a message, and the menus answer at once on a slow device. | Owner's report | Proven in part: browser tests load the WebGL2 client and play, and a phone or a slow device shows a still sky behind the menus. The owner has not confirmed it on the devices that were stuck. |
+| D6 | The radar tells the kinds of things apart at a glance. Enemies are red. | Owner | Proven in part: enemies are red arrows, power-ups are rings, and missiles are yellow diamonds. No person has judged it. |
 
 ## The picture and the sound
 
 | Id | Requirement | Source | Standing |
 |---|---|---|---|
 | A1 | The planes use the models of the asset branch. The build cuts each model into the five parts of P4, so that a broken part disappears. | Owner | Proven: a test of the build, and the screenshots |
-| A2 | A propeller that turns shows as a blur, and its blades do not show. | Owner | Not proven: not built |
+| A2 | A propeller that turns shows as a blur, and its blades do not show. | Owner | Proven in part: the build takes the blades out, and a turning disc takes their place. A person must judge it. |
 | A3 | A missile has a very simple model. | Owner | Proven in part: built. No person has judged it. |
-| A4 | The environment is not trivial: the sky has detail, a sun, and clouds with volume. | Owner | Not proven: in work |
-| A5 | Explosions, trails, flares, and smoke look like clouds with volume. | Owner | Not proven: in work |
+| A4 | The environment is not trivial: the sky has detail, a sun, and clouds with volume. | Owner | Proven in part: a sky dome with a haze, a sun, and clouds of soft puffs, at 60 frames a second on both clients. A person must judge the look. |
+| A5 | Explosions, trails, flares, and smoke look like clouds with volume. | Owner | Proven in part: they are built from soft puffs. A person must judge the look. |
 | A6 | The game plays the sounds of the audio branch. The cockpit voice warns on the events of the match, and the other sounds follow the actions of the plane. The over-G alert is not used. | Owner | Proven in part: a browser test checks that the events start their sounds. An agent cannot hear, so a person must judge the mix. |
-| A7 | Assets that arrive on other branches come into the game: planes, audio, and terrain. Each has a record of its source and its licence. | Owner, proposed | Proven in part: the planes, the audio, and the terrain are in. The licence of the models and of the terrain is not recorded. |
+| A7 | Assets that arrive on other branches come into the game: planes, audio, and terrain. Each has a record of its source and its licence. | Owner, proposed | Proven in part: the planes, the audio, and the terrain are in. The licences are open (issue 9d4367b). |
+| A8 | A boost shows clearly, with speed streaks for the player. | Owner | Proven in part: a flame, a dense trail, and streaks. A person must judge it. |
+| A9 | A power-up is easy to see from afar, the repair included. | Owner | Proven in part: each power-up has a pillar of light and a pulsing sign, and the repair is a light green cross. A person must judge it. |
 
 ## The lobby
 
@@ -119,7 +124,7 @@ Each requirement has a standing:
 | S2 | The gyroscope of a phone is allowed, because it reads no camera and no microphone. | Proposed | Proven |
 | S3 | Commit messages carry no trailers and no co-author lines. | Owner | Proven |
 | S4 | One long GPU job runs at a time on the development machine. | Owner's machine | Proven |
-| S5 | The agents of the project work together through the issue tracker and the branches of the remote. Each agent reads both from time to time, and takes the opinions, the code, and the assets of the others into account. | Owner | Proven in part: this branch holds the documents, the audio, the planes, and the terrain of the others. Two of their decisions were overruled by later directions of the owner (E13, C2). |
+| S5 | The agents of the project work together through the issue tracker and the branches of the remote. Each agent reads both from time to time, and takes the opinions, the code, and the assets of the others into account. The work that the game uses lands in one line on the branch `main`, and the agent on `main` pushes it with the issues, so that other agents can take open issues in parallel. | Owner | Proven: `main` holds the work of three branches, and the open issues name who works on them. |
 
 ## Disqualified ideas
 
