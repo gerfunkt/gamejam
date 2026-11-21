@@ -1,0 +1,13 @@
+#!/bin/sh
+# The host linker of this workspace: the lld inside the Rust toolchain, with no C compiler.
+#
+# rustc usually lets `cc` link, and `cc` adds the start files and the library paths of the
+# system. This driver adds them itself. glibc owns the start files, and libgcc owns the unwinder.
+# rustc reads the name `ld` as a plain linker, and it puts the directory of `rust-lld` on PATH.
+here=$(dirname "$0")
+start=/usr/lib/Scrt1.o
+for arg do
+	# A shared library, such as a procedural macro, has no program start.
+	[ "$arg" = "-shared" ] && start=
+done
+exec rust-lld -flavor gnu "$@" --dynamic-linker=/lib64/ld-linux-x86-64.so.2 $start /usr/lib/crti.o -L/usr/lib -L"$here/lib" /usr/lib/crtn.o

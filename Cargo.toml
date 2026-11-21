@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+license-file = "LICENSE"
+publish = false
+
+[workspace.dependencies]
+# The engine re-exports this version, so the rules and the client share one vector type.
+glam = "0.33"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+wildcard_imports = "warn"
+
+# The edit and test loop: the game code builds fast, and the dependencies run fast.
+[profile.dev]
+opt-level = 1
+# A browser cannot use debug information, and it slows the link. The function names stay,
+# so a crash report stays readable.
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# The build for a playtest or the demo.
+[profile.release]
+# One codegen unit for each core keeps the build of the client short.
+codegen-units = 16
+# Without the function names, the download is about half as large.
+strip = true

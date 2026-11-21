@@ -1,0 +1,4 @@
+#!/bin/sh
+# A stand-in that fails, and that records the call. `feasibility.md` says how to use it.
+echo "BLOCKED: clang $*" >> "${NO_CC_LOG:-/dev/stderr}"
+exit 1

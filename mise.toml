@@ -1,4 +1,16 @@
 [tools]
 "aqua:git-bug/git-bug" = "latest"
+# Mr. Boxington keeps compiled crates for every checkout. Its version does not change the build.
+mr-boxington = "latest"
 node = "lts"
 "npm:@moonshot-ai/kimi-code" = "latest"
+# The minor version is fixed, because a new compiler builds the whole engine again, and can break it.
+rust = { version = "1.100", targets = "wasm32-unknown-unknown" }
+
+[tasks.test]
+description = "Run the tests of the game rules"
+run = "mbx test -p sim"
+
+[tasks.check]
+description = "Check the format and the lints of all crates"
+run = ["cargo fmt --all --check", "mbx clippy --workspace --all-targets --locked -- -D warnings"]
