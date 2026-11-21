@@ -55,15 +55,17 @@ impl TryFrom<String> for SignedAxis {
 }
 
 /// Which axes of a model point to the nose and to the sky.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Orientation {
 	/// The axis along which the plane flies.
 	pub nose: SignedAxis,
 	/// The axis that points up from the plane.
 	pub up: SignedAxis,
+	/// The angle in degrees by which to lift the nose after the axes are turned. A negative angle lowers it.
+	pub pitch: f32,
 }
 
-/// Turn the triangles so that the nose points to -Z and up is +Y.
+/// Turn the triangles so that the nose points to -Z and up is +Y, and then lift the nose by the pitch.
 ///
 /// The turn is a rotation, so it keeps the winding of the triangles.
 ///
@@ -83,7 +85,27 @@ pub fn orient(triangles: &mut [Triangle], orientation: Orientation) -> Result<()
 		vertex.position = turn(vertex.position);
 		vertex.normal = turn(vertex.normal);
 	}
+	pitch(triangles, orientation.pitch);
 	Ok(())
+}
+
+/// Turn the triangles about the X axis of the plane, so that a positive angle in degrees lifts the nose.
+pub fn pitch(triangles: &mut [Triangle], degrees: f32) {
+	let (sin, cos) = degrees.to_radians().sin_cos();
+	let lift = |vector: Vec3| {
+		Vec3::new(
+			vector.x,
+			vector.y * cos - vector.z * sin,
+			vector.y * sin + vector.z * cos,
+		)
+	};
+	if degrees == 0.0 {
+		return;
+	}
+	for vertex in triangles.iter_mut().flatten() {
+		vertex.position = lift(vertex.position);
+		vertex.normal = lift(vertex.normal);
+	}
 }
 
 /// Return the box that holds all five parts of the plane of the rules, as its minimum and maximum corners.
@@ -150,6 +172,7 @@ mod tests {
 		let orientation = Orientation {
 			nose: "+X".parse().unwrap(),
 			up: "+Z".parse().unwrap(),
+			pitch: 0.0,
 		};
 		orient(&mut triangles, orientation).unwrap();
 		let [nose, side, sky] = triangles[0].map(|vertex| vertex.position);
@@ -164,10 +187,33 @@ mod tests {
 	}
 
 	#[test]
+	fn a_positive_pitch_lifts_the_nose_and_turns_the_normals_with_it() {
+		let mut triangles = [triangle([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])];
+		pitch(&mut triangles, 90.0);
+		let [nose, side, top] = triangles[0].map(|vertex| vertex.position);
+		assert!(nose.abs_diff_eq(Vec3::Y, 1e-6), "the nose at -Z goes up: {nose}");
+		assert!(side.abs_diff_eq(Vec3::X, 1e-6), "the X axis stays");
+		assert!(top.abs_diff_eq(Vec3::Z, 1e-6), "the top goes toward the tail: {top}");
+		assert!(
+			triangles[0][0].normal.abs_diff_eq(Vec3::NEG_Y, 1e-6),
+			"the normal +Z turns to -Y"
+		);
+	}
+
+	#[test]
+	fn a_pitch_of_zero_changes_nothing() {
+		let original = [triangle([[0.0, 0.5, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])];
+		let mut triangles = original;
+		pitch(&mut triangles, 0.0);
+		assert_eq!(triangles, original, "no turn");
+	}
+
+	#[test]
 	fn a_nose_and_an_up_axis_on_one_line_are_refused() {
 		let orientation = Orientation {
 			nose: "+X".parse().unwrap(),
 			up: "-X".parse().unwrap(),
+			pitch: 0.0,
 		};
 		assert!(orient(&mut [], orientation).is_err(), "the axes must differ");
 	}

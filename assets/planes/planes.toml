@@ -10,6 +10,7 @@ model = "wwi-fighter/model.fbx"
 texture = "wwi-fighter/texture.png"
 nose = "-X"
 up = "+Y"
+pitch = -11.5
 kills = 0
 
 [plane.record]

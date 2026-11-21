@@ -24,7 +24,7 @@ pub struct Record {
 }
 
 /// One plane model.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Plane {
 	/// The stable name of the model. It names the output file.
@@ -37,6 +37,9 @@ pub struct Plane {
 	pub nose: SignedAxis,
 	/// The axis of the model that points up.
 	pub up: SignedAxis,
+	/// The angle in degrees by which to lift the nose, to level a model that stands on its wheels. Default 0.
+	#[serde(default)]
+	pub pitch: f32,
 	/// The number of kills from which a pilot flies this model.
 	pub kills: u32,
 	/// The origin of the model.
@@ -125,6 +128,13 @@ licence = "not recorded"
 		let planes = read(&path).unwrap();
 		assert_eq!(planes[0].key, "wwi-fighter", "the first model of the game");
 		assert_eq!(planes[0].kills, 0, "a new pilot flies it");
+	}
+
+	#[test]
+	fn a_pitch_is_read_and_defaults_to_zero() {
+		let with_pitch = entry("a", 0).replace("kills = 0", "pitch = -12.5\nkills = 0");
+		assert_eq!(parse(&with_pitch).unwrap()[0].pitch, -12.5, "the pitch of the entry");
+		assert_eq!(parse(&entry("a", 0)).unwrap()[0].pitch, 0.0, "no pitch means level");
 	}
 
 	#[test]

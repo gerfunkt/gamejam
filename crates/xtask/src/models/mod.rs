@@ -90,6 +90,7 @@ pub fn run(root: &Path, preview: bool) -> Result<()> {
 			Orientation {
 				nose: plane.nose,
 				up: plane.up,
+				pitch: plane.pitch,
 			},
 		)
 		.with_context(|| format!("cannot convert the model of {}", plane.key))?;
@@ -156,6 +157,7 @@ mod tests {
 			Orientation {
 				nose: plane.nose,
 				up: plane.up,
+				pitch: plane.pitch,
 			},
 		)
 		.unwrap();
