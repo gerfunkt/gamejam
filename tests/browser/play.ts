@@ -436,7 +436,7 @@ Object.assign(scenarios, {
 		await nextStat(player);
 		const leaned = Number((await nextStat(player)).heading);
 		const swing = ((leaned - level[1] + 540) % 360) - 180;
-		check(swing > 4 && swing < 150, `a roll of the phone to the right turns the plane to the right (${swing.toFixed(0)} degrees)`);
+		check(swing > 4 && swing < 40, `a small roll of the phone turns the plane gently to the right (${swing.toFixed(0)} degrees)`);
 		await lean(0, -60);
 		await shot(player, "phone");
 		// The tilt button turns the tilt steering off, and the stick steers alone.

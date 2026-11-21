@@ -21,8 +21,11 @@ use crate::page;
 const WHEEL_THROTTLE: f32 = 0.1;
 /// How much one second of a throttle key changes the throttle.
 const KEY_THROTTLE: f32 = 0.7;
-/// How far the stick or the tilt at its limit moves the aim, as the tangent of the angle.
+/// How far the stick at its limit moves the aim, as the tangent of the angle.
 const STICK_AIM: f32 = 0.8;
+/// How far the tilt at its limit moves the aim. A phone moves in the hand, so a gentler aim
+/// keeps a small movement from throwing the plane across the sky.
+const TILT_AIM: f32 = 0.5;
 /// The name under which the page stores whether the tilt steers.
 const TILT_KEY: &str = "tilt";
 /// The tilt below which the phone counts as level, in radians.
@@ -583,7 +586,7 @@ pub fn read(options: &Options, lens: Lens, throttle: &mut f32, dt: f32) -> Contr
 				(true, Some(gravity)) => tilt(gravity, &mut state.level),
 				_ => Vec2::ZERO,
 			};
-			(state.stick + leaned).clamp_length_max(1.0) * STICK_AIM
+			(state.stick * STICK_AIM + leaned * TILT_AIM).clamp_length_max(STICK_AIM)
 		} else {
 			let window = page::window();
 			let side =
