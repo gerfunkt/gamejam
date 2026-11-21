@@ -34,7 +34,7 @@ On a desktop, the plane turns toward the mouse cursor. The left button fires the
 
 The workflow "Publish the game" builds both clients and publishes them to GitHub Pages. Run it from the Actions tab with "Run workflow". Before the first run, switch Pages on once: Settings, Pages, Source "GitHub Actions".
 
-Pages serves files only, so the published game plays solo at once. For online play, one computer of the network runs `cargo xtask serve`. Each player opens the address that it prints once to accept the certificate, and then enters that address under "Game Server" in the room list of the published game. The address `…/?server=192.168.1.20:5201` does the same in one step.
+Pages serves files only, so the published game plays solo at once. For online play, one computer of the network runs `cargo xtask serve`. The published page opens with a large link to that server: the input `server` of the workflow, `https://192.168.0.87:5201` by default. Players can also stay on the published page, accept the certificate of the server once, and enter its address under "Game Server" in the room list. The address `…/?server=192.168.0.87:5201` does the same in one step.
 
 ## Develop
 

@@ -12,6 +12,9 @@
 		<!-- The game has no icon yet. An empty one stops the request of the browser for a file. -->
 		<link rel="icon" href="data:,">
 		<link rel="stylesheet" href="style.css">
+		<!-- The workflow that publishes the game to GitHub Pages writes the address of the game server
+			of the local network here. The page then sends players there for the multiplayer game. -->
+		<meta name="game-server" content="">
 	</head>
 	<body>
 		<canvas id="game" tabindex="-1" aria-label="The sky of the match"></canvas>
@@ -73,6 +76,16 @@
 		</div>
 
 		<p id="sideways" role="alert">Turn your phone sideways to play.</p>
+
+		<aside id="elsewhere" role="dialog" aria-modal="true" aria-labelledby="elsewhere-title" hidden>
+			<div>
+				<h2 id="elsewhere-title">Play With Everyone</h2>
+				<p>This copy of the game plays solo. The full multiplayer game runs on the game server of the local network:</p>
+				<a id="elsewhere-link" href="./"></a>
+				<p class="lead">The first visit shows a warning about the certificate of the server. Accept it once.</p>
+				<button type="button" id="elsewhere-close" class="quiet">Play Solo Here</button>
+			</div>
+		</aside>
 
 		<main id="ui">
 			<p id="status" role="status" aria-live="polite">Loading…</p>
@@ -237,6 +250,19 @@
 			It shows how much of the game arrived, and it says why when the game cannot start.
 			Everything after the start is Rust. -->
 		<script type="module">
+			// A published copy names the game server of the local network, and offers it before anything else.
+			const server = document.querySelector('meta[name="game-server"]')?.content;
+			if (server) {
+				const overlay = document.getElementById("elsewhere");
+				const link = document.getElementById("elsewhere-link");
+				link.href = server;
+				link.textContent = server;
+				overlay.hidden = false;
+				link.focus();
+				document.getElementById("elsewhere-close").addEventListener("click", () => {
+					overlay.hidden = true;
+				});
+			}
 			const status = document.getElementById("status");
 			const forced = new URLSearchParams(location.search).get("backend") ?? sessionStorage.getItem("backend");
 			// Some browsers offer WebGPU and then never answer. Three seconds are enough for an adapter.
