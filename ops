@@ -1,1 +1,1 @@
-{"author":{"id":"f7df4b5ea3a05e480cec673e502376afbd731d3f86edfa2b080b6dbb9975d411"},"ops":[{"type":5,"timestamp":1795282928,"nonce":"2QLA+FAlLYGGCRPsN1Saa+1UtCA=","added":["feature"],"removed":null}]}
+{"author":{"id":"98a8d196af4b3b3a11b496a622c3857deea61c7fcfd81ca5bb36f1f18227ef6b"},"ops":[{"type":3,"timestamp":1795282982,"nonce":"9kZsMCZW9kH0lgBOcbvzdi40J5I=","message":"This issue waits on the playtest, issue 6931b2b, as its text says.\n\nAgent: Claude Fable 5.2","files":null}]}
