@@ -148,7 +148,12 @@ fn list(planes: &[manifest::Plane], propellers: &[Option<Disc>]) -> serde_json::
 	ordered
 		.into_iter()
 		.map(|(plane, propeller)| {
-			let mut entry = json!({"key": plane.key, "file": format!("{}.glb", plane.key), "kills": plane.kills});
+			let mut entry = json!({
+				"key": plane.key,
+				"name": plane.name,
+				"file": format!("{}.glb", plane.key),
+				"kills": plane.kills,
+			});
 			if let Some(disc) = propeller {
 				entry["propeller"] = json!({"centre": disc.centre.to_array(), "radius": disc.radius});
 			}
@@ -265,7 +270,7 @@ mod tests {
 	fn the_list_for_the_client_is_in_the_order_of_the_kills() {
 		let entry = |key: &str, kills: u32| {
 			format!(
-				"[[plane]]\nkey = \"{key}\"\nmodel = \"m.fbx\"\ntexture = \"t.png\"\nnose = \"-Z\"\nup = \"+Y\"\nkills = {kills}\n\
+				"[[plane]]\nkey = \"{key}\"\nname = \"{key} Plane\"\nmodel = \"m.fbx\"\ntexture = \"t.png\"\nnose = \"-Z\"\nup = \"+Y\"\nkills = {kills}\n\
 				 [plane.record]\nauthor = \"a\"\nservice = \"s\"\ndate = \"d\"\nprompt = \"p\"\nlicence = \"l\"\n"
 			)
 		};
@@ -278,8 +283,8 @@ mod tests {
 		assert_eq!(
 			list,
 			json!([
-				{"key": "rookie", "file": "rookie.glb", "kills": 0, "propeller": {"centre": [0.0, 0.5, -3.5], "radius": 1.25}},
-				{"key": "ace", "file": "ace.glb", "kills": 10},
+				{"key": "rookie", "name": "rookie Plane", "file": "rookie.glb", "kills": 0, "propeller": {"centre": [0.0, 0.5, -3.5], "radius": 1.25}},
+				{"key": "ace", "name": "ace Plane", "file": "ace.glb", "kills": 10},
 			]),
 			"the models by the number of kills, and the propeller of the model that has one"
 		);

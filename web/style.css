@@ -464,6 +464,7 @@ th:not(:first-child) {
 /* The state of the plane: its picture and the health of each part, at the top left. */
 #health {
 	position: absolute;
+	/* The name of the plane stands under the group. */
 	left: max(0.75rem, env(safe-area-inset-left));
 	top: max(0.75rem, env(safe-area-inset-top));
 	display: flex;
@@ -475,6 +476,16 @@ th:not(:first-child) {
 #alert.calm {
 	color: var(--good);
 	font-size: 1.05rem;
+}
+
+#plane-name {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 0.2rem);
+	margin: 0;
+	color: var(--accent);
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 #gauges {

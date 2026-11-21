@@ -12,7 +12,7 @@ use crate::{
 	flow::{Flow, Game, Screen},
 	input::{self, Bind, key_name},
 	page::{self, Piece},
-	view::Drawn,
+	view::{Drawn, PlaneModels},
 };
 
 /// The most planes that the display marks at once.
@@ -458,6 +458,8 @@ struct Memory {
 	hurt: f32,
 	/// The praise for a kill, and the seconds for which it still shows.
 	praise: (String, f32),
+	/// The kills of the player when the display last looked, to notice an earned plane.
+	plane_kills: Option<u16>,
 }
 
 /// Draw the radar: the planes around the player from above, with the nose of the player at the top.
@@ -579,6 +581,7 @@ fn show_display(
 	game: Res<Game>,
 	time: Res<Time>,
 	camera: Single<(&Camera, &Transform), With<Camera3d>>,
+	models: Res<PlaneModels>,
 	mut memory: Local<Memory>,
 ) {
 	let running = game
@@ -606,6 +609,17 @@ fn show_display(
 		return;
 	};
 	let alive = running.respawn_in(me).is_none();
+	let plane_name = models.name_for(own_state.kills).unwrap_or("Plane");
+	page::set_text("plane-name", plane_name);
+	// A pilot who earned a newer plane hears of it in the feed and in the middle of the picture.
+	if let Some(before) = memory.plane_kills.replace(own_state.kills)
+		&& own_state.kills > before
+		&& models.name_for(before) != models.name_for(own_state.kills)
+	{
+		let line = format!("Plane Upgrade: {plane_name}");
+		memory.feed.push((line.clone(), FEED_SECONDS));
+		memory.praise = (line, PRAISE_SECONDS);
+	}
 	let dt = time.delta_secs();
 	let (camera, camera_place) = camera.into_inner();
 	let camera_frame = GlobalTransform::from(*camera_place);

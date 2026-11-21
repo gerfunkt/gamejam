@@ -79,6 +79,8 @@ struct Models {
 /// One entry of the list of plane models that the build writes beside the page.
 #[derive(Deserialize)]
 struct ModelEntry {
+	/// The name of the plane that the player sees.
+	name: String,
 	/// The file of the model, in the directory of the plane models.
 	file: String,
 	/// The kills from which a pilot flies this model.
@@ -99,6 +101,7 @@ type LoadedModel = ([Handle<Mesh>; Part::ALL.len()], Option<Handle<Image>>);
 
 /// A plane model of the build. The build cut it into one mesh for each part of the rules.
 struct PlaneModel {
+	name: String,
 	kills: u16,
 	propeller: Option<Propeller>,
 	file: Handle<Gltf>,
@@ -108,7 +111,7 @@ struct PlaneModel {
 
 /// The plane models, in the order of their kills. Without a model, a plane shows as boxes.
 #[derive(Resource, Default)]
-struct PlaneModels(Vec<PlaneModel>);
+pub struct PlaneModels(Vec<PlaneModel>);
 
 impl PlaneModels {
 	/// Return the place in the list of the model that a pilot with these kills flies, if it is loaded.
@@ -116,6 +119,14 @@ impl PlaneModels {
 		self.0
 			.iter()
 			.rposition(|model| model.kills <= kills && model.parts.is_some())
+	}
+
+	/// Return the name of the plane that a pilot with these kills flies.
+	pub fn name_for(&self, kills: u16) -> Option<&str> {
+		self.0
+			.iter()
+			.rposition(|model| model.kills <= kills)
+			.map(|index| self.0[index].name.as_str())
 	}
 }
 
@@ -225,6 +236,7 @@ fn load_plane_models(
 		models.0 = entries
 			.into_iter()
 			.map(|entry| PlaneModel {
+				name: entry.name,
 				kills: entry.kills,
 				propeller: entry.propeller,
 				file: assets.load(format!("planes/{}", entry.file)),

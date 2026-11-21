@@ -14,6 +14,8 @@ use crate::{mesh::orient::SignedAxis, record::Record};
 pub struct Plane {
 	/// The stable name of the model. It names the output file.
 	pub key: String,
+	/// The name of the plane that the player sees.
+	pub name: String,
 	/// The FBX file, relative to the manifest.
 	pub model: PathBuf,
 	/// The PNG texture of the model, relative to the manifest.
@@ -103,6 +105,7 @@ mod tests {
 	const ENTRY: &str = r#"
 [[plane]]
 key = "{key}"
+name = "Test Plane"
 model = "m.fbx"
 texture = "t.png"
 nose = "-Z"
@@ -125,7 +128,9 @@ licence = "not recorded"
 		let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/planes/planes.toml");
 		let planes = read(&path).unwrap();
 		assert_eq!(planes[0].key, "wwi-fighter", "the first model of the game");
+		assert_eq!(planes[0].name, "Sopwith Camel", "the name on the screen");
 		assert_eq!(planes[0].kills, 0, "a new pilot flies it");
+		assert_eq!(planes[1].kills, 3, "three kills earn the second model");
 	}
 
 	#[test]

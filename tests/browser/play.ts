@@ -468,6 +468,23 @@ Object.assign(scenarios, {
 		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
 	},
 
+	/** The first plane, and the plane that three kills earn. */
+	async planes(browser: Browser) {
+		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });
+		const player = await open(context, "planes", "pilot=bot");
+		const { page } = player;
+		await page.getByRole("button", { name: "Fly Solo" }).click();
+		await chooseBots(page, 4, "Rookie");
+		await page.getByRole("button", { name: "Start Match" }).click();
+		await page.locator("#hud").waitFor({ state: "visible" });
+		await page.waitForFunction(() => document.querySelector("#plane-name")?.textContent === "Sopwith Camel", null, { timeout: 10_000 }).catch(() => {});
+		check((await page.locator("#plane-name").textContent()) === "Sopwith Camel", "a new pilot flies the Sopwith Camel");
+		await page.waitForFunction(() => document.querySelector("#plane-name")?.textContent === "Supermarine Spitfire", null, { timeout: 90_000 }).catch(() => {});
+		check((await page.locator("#plane-name").textContent()) === "Supermarine Spitfire", "three kills earn the Supermarine Spitfire");
+		check((await page.locator("#feed").textContent())?.includes("Plane Upgrade: Supermarine Spitfire") ?? false, "the upgrade says what the pilot earned");
+		check(player.errors.length === 0, `the page reports no error (${player.errors.length})`);
+	},
+
 	/** A solo match against three bots, and the events that the sound raised in it. */
 	async sound(browser: Browser) {
 		const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 720 } });

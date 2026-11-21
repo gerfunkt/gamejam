@@ -14,6 +14,7 @@
 # tail are at the same height. The wings of this model sit about 2 m ahead of the wing boxes of the
 # rules. The plane is centred on its bounding box, so the boxes and the wings do not overlap.
 key = "wwi-fighter"
+name = "Sopwith Camel"
 model = "wwi-fighter/model.fbx"
 texture = "wwi-fighter/texture.png"
 nose = "-X"
@@ -34,6 +35,7 @@ licence = "not recorded"
 # The model stands on its wheels, so pitch = -8 levels it: the propeller hub and the middle of the
 # tail are at the same height.
 key = "wwii-fighter"
+name = "Supermarine Spitfire"
 model = "wwii-fighter/model.fbx"
 texture = "wwii-fighter/texture.png"
 nose = "-X"
@@ -54,6 +56,7 @@ licence = "not recorded"
 # The model is level as it is. The swept wings reach back to the tailplanes, so the cut finds the
 # end of the wings from the shape of the model.
 key = "f14-tomcat"
+name = "Grumman F-14 Tomcat"
 model = "f14-tomcat/model.fbx"
 texture = "f14-tomcat/texture.png"
 nose = "-X"
