@@ -9,6 +9,12 @@
 //! gives all members one order. A member whose queue is full is removed from its room, and its
 //! connection closes with the code 4004. A member whose socket accepts no frame for
 //! [`WRITE_TIMEOUT`] loses its connection too. The other members see neither delay.
+//!
+//! # Dead peers
+//!
+//! The bus pings each member every [`PING_INTERVAL`]. A member from which no frame arrived for
+//! [`IDLE_TIMEOUT`] is removed, so a machine that sleeps or loses its network does not keep its
+//! place, or the ownership of its room.
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -21,7 +27,7 @@ use sim::room::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::timeout;
+use tokio::time::{Instant, timeout};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
@@ -33,6 +39,10 @@ use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode as WsClos
 const QUEUE_FRAMES: usize = 1024;
 /// How long a member may take to accept one frame.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How often the bus pings a member.
+const PING_INTERVAL: Duration = Duration::from_secs(15);
+/// How long nothing may arrive from a member before the bus removes it: three pings.
+const IDLE_TIMEOUT: Duration = PING_INTERVAL.saturating_mul(3);
 /// How long a closing connection waits for the answer of the peer.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -103,18 +113,23 @@ impl Bus {
 				return;
 			}
 		};
+		let mut pings = tokio::time::interval_at(Instant::now() + PING_INTERVAL, PING_INTERVAL);
+		let mut heard = Instant::now();
 		loop {
 			tokio::select! {
-				incoming = ws.next() => match incoming {
-					Some(Ok(Message::Binary(message))) => self.relay(&room, number, &message),
-					Some(Ok(Message::Text(text))) => self.control(&room, number, &text),
-					Some(Ok(Message::Close(_))) => {
-						// The reply to the close frame waits in the socket until it is flushed.
-						let _ = timeout(WRITE_TIMEOUT, ws.flush()).await;
-						break;
+				incoming = ws.next() => {
+					let Some(Ok(message)) = incoming else { break };
+					heard = Instant::now();
+					match message {
+						Message::Binary(message) => self.relay(&room, number, &message),
+						Message::Text(text) => self.control(&room, number, &text),
+						Message::Close(_) => {
+							// The reply to the close frame waits in the socket until it is flushed.
+							let _ = timeout(WRITE_TIMEOUT, ws.flush()).await;
+							break;
+						}
+						_ => {}
 					}
-					Some(Err(_)) | None => break,
-					Some(Ok(_)) => {}
 				},
 				outgoing = queue.recv() => match outgoing {
 					Some(message) => {
@@ -126,6 +141,12 @@ impl Bus {
 						// The room sent the reason before it dropped the queue.
 						let why = fate.try_recv().unwrap_or(CloseCode::FellBehind);
 						finish(&mut ws, close_frame(why)).await;
+						break;
+					}
+				},
+				_ = pings.tick() => {
+					let silent = heard.elapsed() >= IDLE_TIMEOUT;
+					if silent || !matches!(timeout(WRITE_TIMEOUT, ws.send(Message::Ping(Bytes::new()))).await, Ok(Ok(()))) {
 						break;
 					}
 				},
@@ -393,7 +414,7 @@ mod tests {
 	use tokio_tungstenite::tungstenite::Message;
 	use tokio_tungstenite::tungstenite::protocol::Role;
 
-	use super::{Bus, QUEUE_FRAMES, socket_config};
+	use super::{Bus, IDLE_TIMEOUT, PING_INTERVAL, QUEUE_FRAMES, socket_config};
 
 	/// The client end of a member, with real WebSocket framing.
 	struct Client {
@@ -430,7 +451,11 @@ mod tests {
 		}
 
 		async fn status(&mut self) -> RoomStatus {
-			match self.next().await {
+			self.status_within(Duration::from_secs(5)).await
+		}
+
+		async fn status_within(&mut self, limit: Duration) -> RoomStatus {
+			match self.next_within(limit).await {
 				Message::Text(text) => RoomStatus::parse_frame(&text).expect("the text must be a room status"),
 				other => panic!("expected a room status, got {other:?}"),
 			}
@@ -848,5 +873,26 @@ mod tests {
 		.await
 		.expect("the stream must end");
 		assert_eq!(replies, 1, "the bus must answer the close frame with its own");
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn a_member_that_stops_answering_is_removed_and_the_next_owner_takes_over() {
+		let bus = Bus::new();
+		// This client never reads again, so it answers no ping. Its socket stays open.
+		let _dead = Client::join(&bus, Join::Open).await;
+		let mut alive = Client::join(&bus, Join::Open).await;
+		let limit = IDLE_TIMEOUT + PING_INTERVAL * 2;
+		let status = loop {
+			let status = alive.status_within(limit).await;
+			if status.members == [2] {
+				break status;
+			}
+		};
+		assert_eq!(
+			(status.owner, status.you),
+			(2, 2),
+			"the member that still answers owns the room"
+		);
+		assert_eq!(bus.rooms()[0].members, 1, "the silent member left the room");
 	}
 }

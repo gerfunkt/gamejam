@@ -35,3 +35,5 @@ tokio-tungstenite = { version = "0.30", default-features = false, features = ["h
 
 [dev-dependencies]
 tempfile = "3"
+# The idle test runs in virtual time.
+tokio = { version = "1", features = ["test-util"] }
