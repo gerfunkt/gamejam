@@ -9,6 +9,10 @@ use glam::{Quat, Vec3};
 
 use crate::tuning;
 
+mod grid;
+
+pub use grid::{GridError, HeightGrid};
+
 /// A feature of the terrain: a block that stands on the ground.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Feature {

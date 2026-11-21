@@ -81,6 +81,8 @@ pub const NO_TAIL_CONTROL: f32 = 0.3;
 
 /// A plane touches the terrain when its centre comes this near to it, in metres.
 pub const PLANE_RADIUS: f32 = 2.0;
+/// The side of the square that the terrain covers, with its centre at the origin, in metres.
+pub const TERRAIN_SIDE: f32 = 6400.0;
 /// The height of the highest hill, in metres.
 pub const HILL_HEIGHT: f32 = 140.0;
 /// The number of blocks that stand on the ground.
