@@ -14,6 +14,7 @@ use bevy::prelude::*;
 mod audio;
 mod effects;
 mod flow;
+mod horizon;
 mod hud;
 mod input;
 mod net;
@@ -52,6 +53,7 @@ fn main() {
 			flow::plugin,
 			view::plugin,
 			propeller::plugin,
+			horizon::plugin,
 			sky::plugin,
 			puff::plugin,
 			effects::plugin,
