@@ -193,6 +193,12 @@ impl Game {
 				net::request_rooms();
 			}
 			"refresh" => net::request_rooms(),
+			"server" => {
+				net::set_server(&page::field("server-address"));
+				page::set_field("server-address", &net::server().unwrap_or_default());
+				self.rooms = None;
+				net::request_rooms();
+			}
 			"join" => self.enter(&Join::Room(value.to_owned())),
 			"create" => self.enter(&Join::Create(page::field("room-title"))),
 			"bots-less" => self.choose(|settings| settings.bots = settings.bots.saturating_sub(1)),
@@ -301,6 +307,7 @@ pub fn plugin(app: &mut App) {
 	page::watch_fullscreen();
 	input::watch();
 	page::set_field("name", &Options::load().name);
+	page::set_field("server-address", &net::server().unwrap_or_default());
 	app.insert_resource(Game::new()).add_systems(
 		Update,
 		(handle_page, handle_bus, simulate, send, log_stats)

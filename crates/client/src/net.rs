@@ -15,6 +15,36 @@ use web_sys::{BinaryType, CloseEvent, MessageEvent, WebSocket};
 
 use crate::page;
 
+/// The name under which the page stores the address of the game server that the player chose.
+const SERVER_KEY: &str = "server";
+
+/// Return the address of the game server that the player chose, such as `192.168.1.20:5201`.
+///
+/// Without one, the client talks to the server that served the page. A copy of the game on a host of
+/// static files, such as GitHub Pages, has no server of its own, so its players name one. The address
+/// takes `?server=` from the page address first.
+pub fn server() -> Option<String> {
+	page::query("server")
+		.or_else(|| page::load(SERVER_KEY))
+		.map(|address| plain_address(&address))
+		.filter(|address| !address.is_empty())
+}
+
+/// Remember the game server that the player chose. An empty address means the server of the page.
+pub fn set_server(address: &str) {
+	page::store(SERVER_KEY, &plain_address(address));
+}
+
+/// Return the host and the port of an address that a person typed, without its scheme and its path.
+fn plain_address(address: &str) -> String {
+	let address = address.trim();
+	let address = ["https://", "http://", "wss://", "ws://"]
+		.iter()
+		.find_map(|scheme| address.strip_prefix(scheme))
+		.unwrap_or(address);
+	address.split('/').next().unwrap_or_default().to_owned()
+}
+
 /// Something that arrived from the bus.
 pub enum Incoming {
 	/// The status of the room.
@@ -38,20 +68,28 @@ thread_local! {
 	static LINK: RefCell<Link> = RefCell::new(Link::default());
 }
 
-/// Open a connection to the bus of the server that served the page, and enter a room.
+/// Open a connection to the bus of the game server, and enter a room.
+///
+/// The server is the one that the player chose, or else the one that served the page.
 pub fn connect(join: &Join) {
 	disconnect();
 	let location = page::window().location();
-	let scheme = if location.protocol().is_ok_and(|protocol| protocol == "https:") {
-		"wss"
-	} else {
-		"ws"
+	let address = match server() {
+		// The game server always speaks HTTPS, and a page on a public site may only reach it so.
+		Some(host) => format!("wss://{host}/ws{}", join.to_query()),
+		None => {
+			let scheme = if location.protocol().is_ok_and(|protocol| protocol == "https:") {
+				"wss"
+			} else {
+				"ws"
+			};
+			format!(
+				"{scheme}://{}/ws{}",
+				location.host().unwrap_or_default(),
+				join.to_query()
+			)
+		}
 	};
-	let address = format!(
-		"{scheme}://{}/ws{}",
-		location.host().unwrap_or_default(),
-		join.to_query()
-	);
 	let Ok(socket) = WebSocket::new(&address) else {
 		LINK.with_borrow_mut(|link| link.inbox.push(Incoming::Closed { code: 1006 }));
 		return;
@@ -160,13 +198,27 @@ pub fn request_rooms() {
 }
 
 async fn fetch_rooms() -> Result<Vec<RoomEntry>, String> {
-	let failed = |_| "The server gave no room list. Check the connection, and refresh the list.".to_owned();
-	let response = JsFuture::from(page::window().fetch_with_str("/rooms"))
+	let chosen = server();
+	let reason = || match &chosen {
+		Some(host) => format!(
+			"The server at {host} gave no room list. Open https://{host} once in this browser, accept the \
+			 warning about its certificate, come back, and refresh the list."
+		),
+		None => "This page has no game server. Run “cargo xtask serve” on a computer of your network, and \
+			 open the address that it prints once in this browser to accept its certificate. Then enter \
+			 that address under Game Server, such as 192.168.1.20:5201. Solo flight needs no server."
+			.to_owned(),
+	};
+	let failed = |_| reason();
+	let address = chosen
+		.as_ref()
+		.map_or_else(|| "/rooms".to_owned(), |host| format!("https://{host}/rooms"));
+	let response = JsFuture::from(page::window().fetch_with_str(&address))
 		.await
 		.map_err(failed)?;
 	let response: web_sys::Response = response.dyn_into().map_err(failed)?;
 	let text = JsFuture::from(response.text().map_err(failed)?).await.map_err(failed)?;
-	parse_room_list(&text.as_string().unwrap_or_default()).map_err(|_| failed(wasm_bindgen::JsValue::NULL))
+	parse_room_list(&text.as_string().unwrap_or_default()).map_err(|_| reason())
 }
 
 /// Take the room list, if a new one arrived since the last call.
