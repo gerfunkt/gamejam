@@ -279,44 +279,22 @@ fn a_plane_that_meets_the_ground_is_destroyed_and_stops() {
 }
 
 #[test]
-fn a_plane_that_touches_a_hill_is_destroyed() {
-	// The highest ground on a line through the arena.
-	let (x, top) = (0..500)
-		.map(|step| step as f32 * 10.0 - 2500.0)
-		.map(|x| (x, arena::ground_height(x, 300.0)))
-		.fold((0.0, 0.0), |best, hill| if hill.1 > best.1 { hill } else { best });
-	assert!(top > 60.0, "the line crosses no hill: {top} m");
-	let mut above = Plane::new(Vec3::new(x, top + 30.0, 300.0), Quat::IDENTITY);
+fn a_plane_that_touches_the_highest_mountain_is_destroyed() {
+	let ground = arena::ground();
+	let (column, row) = (0..ground.side())
+		.flat_map(|row| (0..ground.side()).map(move |column| (column, row)))
+		.max_by(|a, b| ground.point(a.0, a.1).total_cmp(&ground.point(b.0, b.1)))
+		.expect("the grid has points");
+	let place = |index: usize| (index as f32 / (ground.side() - 1) as f32 - 0.5) * tuning::TERRAIN_SIDE;
+	let (x, z) = (place(column), place(row));
+	let top = arena::ground_height(x, z);
+	assert!(top > 400.0, "the highest point is no mountain: {top} m");
+	let mut above = Plane::new(Vec3::new(x, top + 30.0, z), Quat::IDENTITY);
 	above.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
-	assert!(!above.is_destroyed(), "a plane 30 m above the hill crashed");
-	let mut below = Plane::new(Vec3::new(x, top - 5.0, 300.0), Quat::IDENTITY);
-	below.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
-	assert!(below.is_destroyed(), "a plane inside the hill flies on");
-}
-
-#[test]
-fn a_plane_that_touches_a_feature_is_destroyed() {
-	let tallest = arena::features()
-		.iter()
-		.max_by(|a, b| a.half_extents.y.total_cmp(&b.half_extents.y))
-		.expect("the arena has features");
-	let top = tallest.centre.y + tallest.half_extents.y;
-	assert!(
-		top > arena::ground_height(tallest.centre.x, tallest.centre.z) + 30.0,
-		"the tallest feature is no obstacle"
-	);
-	let mut inside = Plane::new(
-		tallest.centre + Vec3::Y * (tallest.half_extents.y - 5.0),
-		Quat::IDENTITY,
-	);
+	assert!(!above.is_destroyed(), "a plane 30 m above the mountain crashed");
+	let mut inside = Plane::new(Vec3::new(x, top - 5.0, z), Quat::IDENTITY);
 	inside.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
-	assert!(inside.is_destroyed(), "a plane inside a feature flies on");
-	let mut over = Plane::new(
-		Vec3::new(tallest.centre.x, top + 20.0, tallest.centre.z),
-		Quat::IDENTITY,
-	);
-	over.step(&controls(Vec3::NEG_Z, 0.5), tuning::STEP);
-	assert!(!over.is_destroyed(), "a plane 20 m over a feature crashed");
+	assert!(inside.is_destroyed(), "a plane inside the mountain flies on");
 }
 
 #[test]

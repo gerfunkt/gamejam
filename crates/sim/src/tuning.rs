@@ -86,14 +86,9 @@ pub const TERRAIN_SIDE: f32 = 6400.0;
 /// The most that the terrain rises above its lowest point, in metres. The bake squeezes a taller
 /// model to this. Planes fight from about 400 m up to the ceiling, so the air above the terrain stays open.
 pub const TERRAIN_MAX_RISE: f32 = 500.0;
-/// The height of the highest hill, in metres.
-pub const HILL_HEIGHT: f32 = 140.0;
-/// The number of blocks that stand on the ground.
-pub const FEATURES: u32 = 160;
-/// The height of the tallest block, in metres.
-pub const FEATURE_MAX_HEIGHT: f32 = 90.0;
-/// How deep a block stands in the ground, in metres.
-pub const FEATURE_SUNK: f32 = 12.0;
+/// The distance within which `arena::clear_height` looks for the highest ground, in metres. It is a few
+/// cells of the height grid, and it covers the slope that a plane meets before it can turn away.
+pub const TERRAIN_CLEAR_RADIUS: f32 = 100.0;
 /// The distance from the centre beyond which a plane turns back by itself, in metres.
 pub const ARENA_RADIUS: f32 = 2500.0;
 
