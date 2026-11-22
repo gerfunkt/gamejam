@@ -1,0 +1,880 @@
+{
+  "version": 1,
+  "total_assets": 37,
+  "event_map": {
+    "part_broken_master": "betty_warning",
+    "part_broken_left_wing": [
+      "betty_warning",
+      "betty_aoa_over_limit",
+      "sfx_stall_buffet"
+    ],
+    "part_broken_right_wing": [
+      "betty_warning",
+      "betty_aoa_over_limit",
+      "sfx_stall_buffet"
+    ],
+    "part_broken_tail": [
+      "betty_warning",
+      "betty_max_aoa",
+      "sfx_stall_buffet"
+    ],
+    "part_broken_engine": [
+      "betty_warning",
+      "betty_min_speed",
+      "sfx_stall_horn"
+    ],
+    "fuselage_critical": [
+      "betty_warning_double",
+      "sfx_caution_tone"
+    ],
+    "part_damaged_caution": [
+      "betty_caution",
+      "sfx_caution_tone"
+    ],
+    "hit_taken": [
+      "sfx_caution_tone"
+    ],
+    "lock_tracking": [
+      "sfx_aim9_growl"
+    ],
+    "lock_acquired": [
+      "betty_lock",
+      "sfx_rwr_new"
+    ],
+    "enemy_lock_on_me": [
+      "sfx_rwr_sam_launch",
+      "betty_lock"
+    ],
+    "missile_launched_by_me": [
+      "sfx_aim_launch",
+      "sfx_missile_motor"
+    ],
+    "missile_incoming": [
+      "sfx_rwr_launch",
+      "betty_missile"
+    ],
+    "missile_evaded": [
+      "betty_chaff_flare"
+    ],
+    "missile_burst": [
+      "sfx_missile_explosion"
+    ],
+    "gun_fire": [
+      "sfx_vulcan_cannon"
+    ],
+    "plane_killed": [
+      "sfx_missile_explosion"
+    ],
+    "spawn_protected_start": [
+      "betty_jammer"
+    ],
+    "spawn_protected_end": [
+      "betty_chaff_flare_out"
+    ],
+    "target_is_protected": [
+      "betty_iff"
+    ],
+    "low_altitude": [
+      "betty_altitude"
+    ],
+    "steep_dive_pullup": [
+      "betty_pullup_f16",
+      "betty_pullup_wt"
+    ],
+    "boost_max_speed": [
+      "betty_max_speed",
+      "sfx_exhaust_afterburner"
+    ],
+    "engine_loop": [
+      "sfx_engine_cockpit"
+    ],
+    "match_start": [
+      "betty_data",
+      "betty_gear_up"
+    ],
+    "match_end": [
+      "betty_bingo",
+      "betty_bingo_fuel",
+      "betty_gear_down"
+    ]
+  },
+  "assets": [
+    {
+      "id": "betty_warning",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/warning.wav",
+      "transcript": "Warning, warning",
+      "sim_trigger": "Event::Broken { target: local }",
+      "priority": 90,
+      "cooldown_s": 2.0,
+      "description": "Master voice warning when any plane part breaks off.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "e35d63aab42f233821c8423abea6dc1af99afbc4",
+      "size_bytes": 218132,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 108977,
+        "duration_s": 2.471
+      }
+    },
+    {
+      "id": "betty_warning_double",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/warning_double.wav",
+      "transcript": "Warning! Warning!",
+      "sim_trigger": "Event::Hit { target: local, part: Part::Fuselage } when fuselage <= 25",
+      "priority": 95,
+      "cooldown_s": 3.0,
+      "description": "Critical fuselage integrity warning before destruction.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "371dcabba64fc2dbb34192cf1bfa595b5646c066",
+      "size_bytes": 324686,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 81152,
+        "duration_s": 1.84
+      }
+    },
+    {
+      "id": "betty_caution",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/caution.wav",
+      "transcript": "Caution, caution",
+      "sim_trigger": "Event::Hit { target: local } when part health < 50%",
+      "priority": 70,
+      "cooldown_s": 3.0,
+      "description": "Part damaged below 50% health.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "9142955a5366255d46e782d1dac07dd6b88f8874",
+      "size_bytes": 299866,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 149844,
+        "duration_s": 3.398
+      }
+    },
+    {
+      "id": "betty_lock",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/lock.wav",
+      "transcript": "Lock, lock",
+      "sim_trigger": "Lock::locked() == Some(target) (held >= 1.2s)",
+      "priority": 85,
+      "cooldown_s": 1.5,
+      "description": "Target lock acquired or enemy lock warning.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "428a3176aef6579f1af24c0687b36e6df7d901db",
+      "size_bytes": 100074,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 49948,
+        "duration_s": 1.133
+      }
+    },
+    {
+      "id": "betty_missile",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/missile.wav",
+      "transcript": "Missile, missile",
+      "sim_trigger": "Event::Launch { target: local, .. }",
+      "priority": 100,
+      "cooldown_s": 1.0,
+      "description": "Highest-priority alert when a missile is launched at the local player (Requirement P9).",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "7cc5a2a2cb95178292bdeada94c6786774b4f7d3",
+      "size_bytes": 131238,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 65519,
+        "duration_s": 1.486
+      }
+    },
+    {
+      "id": "betty_pullup_f16",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/pullup.wav",
+      "transcript": "Pull up, pull up",
+      "sim_trigger": "Plane.pitch < -0.4 && Plane.pos.y < 60.0",
+      "priority": 98,
+      "cooldown_s": 2.0,
+      "description": "F-16 ground proximity / steep dive recovery warning.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "d5e50006a5aaf69e0c6d0831e3c630d939e8a1a0",
+      "size_bytes": 171592,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 85707,
+        "duration_s": 1.943
+      }
+    },
+    {
+      "id": "betty_pullup_wt",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/pullup_fast.wav",
+      "transcript": "Pull up!",
+      "sim_trigger": "Plane.parts.engine == 0 && Plane.pitch < -0.2",
+      "priority": 92,
+      "cooldown_s": 2.0,
+      "description": "Fast 'Pull up' warning when sinking with a dead engine.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "00cca82fc255c935434ce3a4e3054052f2344fe5",
+      "size_bytes": 92514,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 23109,
+        "duration_s": 0.524
+      }
+    },
+    {
+      "id": "betty_altitude",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/altitude.wav",
+      "transcript": "Altitude, altitude",
+      "sim_trigger": "Plane.pos.y < 80.0",
+      "priority": 80,
+      "cooldown_s": 4.0,
+      "description": "Low altitude warning.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "be756e57410108a6bad99bcdc6986c8d617349b2",
+      "size_bytes": 178968,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 89395,
+        "duration_s": 2.027
+      }
+    },
+    {
+      "id": "betty_aoa_over_limit",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/aoa_over_limit.wav",
+      "transcript": "Angle of attack over limit",
+      "sim_trigger": "Event::Broken { target: local, part: Part::LeftWing | Part::RightWing }",
+      "priority": 88,
+      "cooldown_s": 2.0,
+      "description": "Asymmetric roll/pull departure warning when a left or right wing breaks off (WING_ROLL / WING_PULL).",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "b286a8e950901d8126eeefd98ad21ab22e79a245",
+      "size_bytes": 341070,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 85248,
+        "duration_s": 1.933
+      }
+    },
+    {
+      "id": "betty_max_aoa",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/max_aoa.wav",
+      "transcript": "Maximum angle of attack",
+      "sim_trigger": "Event::Broken { target: local, part: Part::Tail }",
+      "priority": 88,
+      "cooldown_s": 2.0,
+      "description": "Control authority degradation warning when the tail stabilizer breaks off (TAIL_AUTHORITY = 0.4).",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "c63bbb75e8d13b90a07f4bbff483f0389c9e2a13",
+      "size_bytes": 249934,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 62464,
+        "duration_s": 1.416
+      }
+    },
+    {
+      "id": "betty_min_speed",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/min_speed.wav",
+      "transcript": "Minimum speed",
+      "sim_trigger": "Event::Broken { target: local, part: Part::Engine }",
+      "priority": 88,
+      "cooldown_s": 2.0,
+      "description": "Speed bleed warning when the engine breaks and thrust goes offline (DEAD_ENGINE_DRAG).",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "3c2b165c24be75015a9feaa615ef642ce436e13c",
+      "size_bytes": 207950,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 51968,
+        "duration_s": 1.178
+      }
+    },
+    {
+      "id": "betty_max_speed",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/max_speed.wav",
+      "transcript": "Maximum speed",
+      "sim_trigger": "Controls.boost == true && Plane.speed() >= MAX_SPEED * BOOST_MULT * 0.95",
+      "priority": 50,
+      "cooldown_s": 6.0,
+      "description": "Overspeed callout when boosting at full throttle.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "303c706715ab51fce74aa4c8e23b00824c4f94f1",
+      "size_bytes": 236622,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 59136,
+        "duration_s": 1.341
+      }
+    },
+    {
+      "id": "betty_over_g",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/over_g.wav",
+      "transcript": "Over G",
+      "sim_trigger": "Hard break turn (yaw.abs() > 0.9 || pitch.abs() > 0.9) while evading missile",
+      "priority": 65,
+      "cooldown_s": 3.0,
+      "description": "Short high-G maneuver callout during hard break turns.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "6e42a28a7661f0bc4a203dff5e6ac957356b17c5",
+      "size_bytes": 39832,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 22050,
+        "bits_per_sample": 16,
+        "frames": 19894,
+        "duration_s": 0.902
+      }
+    },
+    {
+      "id": "betty_g_over_limit",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/g_over_limit.wav",
+      "transcript": "G over limit",
+      "sim_trigger": "Sustained hard turn with damaged wing",
+      "priority": 65,
+      "cooldown_s": 4.0,
+      "description": "Extended G-limit warning.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "7a3e9bdcddfa7910f935efb34cfd9a4475019ca8",
+      "size_bytes": 506958,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 126720,
+        "duration_s": 2.873
+      }
+    },
+    {
+      "id": "betty_chaff_flare",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/chaff_flare.wav",
+      "transcript": "Chaff, flare",
+      "sim_trigger": "Missile.blind transitions false -> true for target == local",
+      "priority": 80,
+      "cooldown_s": 1.5,
+      "description": "Countermeasure / missile seeker defeated confirmation.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "904d4d2ed7a1636d74fd1902454b0758bc6d9761",
+      "size_bytes": 107006,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 53414,
+        "duration_s": 1.211
+      }
+    },
+    {
+      "id": "betty_chaff_flare_out",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/chaff_flare_out.wav",
+      "transcript": "Chaff, flare, out",
+      "sim_trigger": "now >= Plane.protect_until (spawn protection ends)",
+      "priority": 75,
+      "cooldown_s": 2.0,
+      "description": "Signals that 5-second spawn protection has expired.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "ea221831818051656dfbd8e997505e6c9815559b",
+      "size_bytes": 148870,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 74360,
+        "duration_s": 1.686
+      }
+    },
+    {
+      "id": "betty_jammer",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/jammer.wav",
+      "transcript": "Jammer",
+      "sim_trigger": "Event::Respawn { id: local } (5s spawn protection active)",
+      "priority": 75,
+      "cooldown_s": 2.0,
+      "description": "Announces active ECM / 5-second spawn protection on spawn or respawn.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "44d274ff35ef4d932645563d3d0b324b389efac5",
+      "size_bytes": 109156,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 54489,
+        "duration_s": 1.236
+      }
+    },
+    {
+      "id": "betty_iff",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/iff.wav",
+      "transcript": "I F F",
+      "sim_trigger": "Aiming at a spawn-protected target (target.protected(now))",
+      "priority": 60,
+      "cooldown_s": 3.0,
+      "description": "Alerts shooter that the target under the reticle is currently protected.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "0092b68f5803443d7d87c82d91fec5d424093441",
+      "size_bytes": 122778,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 61300,
+        "duration_s": 1.39
+      }
+    },
+    {
+      "id": "betty_data",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/data.wav",
+      "transcript": "Data",
+      "sim_trigger": "Lobby::Command::Start / Message::Lobby update",
+      "priority": 55,
+      "cooldown_s": 2.0,
+      "description": "Datalink / match telemetry cue.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "bf2f80197ce311f6f3f2880a480d564539f0fee8",
+      "size_bytes": 64744,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 32256,
+        "duration_s": 0.731
+      }
+    },
+    {
+      "id": "betty_bingo",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/bingo.wav",
+      "transcript": "Bingo, bingo",
+      "sim_trigger": "Message::EndMatch",
+      "priority": 80,
+      "cooldown_s": 5.0,
+      "description": "End-of-match / return-to-base bingo callout.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "fbb4d6ddd640fe2fb7a59a03b076713d826d40a8",
+      "size_bytes": 263542,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 131682,
+        "duration_s": 2.986
+      }
+    },
+    {
+      "id": "betty_bingo_fuel",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/bingo_fuel.wav",
+      "transcript": "Bingo fuel",
+      "sim_trigger": "Missile.fuel <= 0.0 || Battle Royale zone closing",
+      "priority": 70,
+      "cooldown_s": 5.0,
+      "description": "Bingo fuel warning.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "6d287f93d7e0ea483b0074e0678a4dea79c01830",
+      "size_bytes": 178254,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 44544,
+        "duration_s": 1.01
+      }
+    },
+    {
+      "id": "betty_gear_up",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/gear_up.wav",
+      "transcript": "Gear up",
+      "sim_trigger": "Initial match spawn airborne ready cue",
+      "priority": 50,
+      "cooldown_s": 5.0,
+      "description": "Airborne / match entry callout.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "0f025f2d385d33b21ffd913292b6f12cb6703c3a",
+      "size_bytes": 146510,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 36608,
+        "duration_s": 0.83
+      }
+    },
+    {
+      "id": "betty_gear_down",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/gear_down.wav",
+      "transcript": "Gear down",
+      "sim_trigger": "Match paused or returning to lobby",
+      "priority": 50,
+      "cooldown_s": 5.0,
+      "description": "Landing / lobby transition callout.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "7e0f0150ae3bd8a59fc5fc31d157724ff48d7659",
+      "size_bytes": 162894,
+      "audio": {
+        "format": "wav",
+        "channels": 2,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 40704,
+        "duration_s": 0.923
+      }
+    },
+    {
+      "id": "betty_combined_reference",
+      "category": "vo/betty",
+      "url": "/assets/audio/vo/betty/combined.wav",
+      "transcript": "Full F-16 Bitching Betty VWS reference compilation",
+      "sim_trigger": "Reference / audio sprite sheet",
+      "priority": 0,
+      "cooldown_s": 0.0,
+      "description": "Master compilation of F-16 Bitching Betty callouts.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "9a54b0f07b207e228a31f9ce554e3a91ebf59095",
+      "size_bytes": 2270278,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 1135044,
+        "duration_s": 25.738
+      }
+    },
+    {
+      "id": "sfx_aim9_growl",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/aim_9_growl.wav",
+      "transcript": null,
+      "sim_trigger": "Lock.target.is_some() && Lock.held < LOCK_TIME (1.2s)",
+      "priority": 60,
+      "cooldown_s": 0.0,
+      "description": "Authentic AIM-9 Sidewinder infrared seeker growl while holding target in lock cone.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "e331b41c6b48eae6a87b2c4fa7fdb199119a3d61",
+      "size_bytes": 338914,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 169344,
+        "duration_s": 3.84
+      }
+    },
+    {
+      "id": "sfx_aim_launch",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/aim_launch.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Launch { shooter: local, .. }",
+      "priority": 85,
+      "cooldown_s": 0.1,
+      "description": "Missile rail release transient on launch.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "c5beb64639dc68bc891935cc478505ae99b08b26",
+      "size_bytes": 5733,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 8000,
+        "bits_per_sample": 8,
+        "frames": 5689,
+        "duration_s": 0.711
+      }
+    },
+    {
+      "id": "sfx_missile_motor",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/missile_flight.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Launch rocket motor ignition and burn",
+      "priority": 85,
+      "cooldown_s": 0.1,
+      "description": "Air-to-air missile rocket motor roar.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "388d5f551b3bfdc14614dd42f24b78f8acd7d04b",
+      "size_bytes": 619820,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 309888,
+        "duration_s": 7.027
+      }
+    },
+    {
+      "id": "sfx_missile_explosion",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/missile_explosion.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Burst { pos, .. } / Event::Kill",
+      "priority": 90,
+      "cooldown_s": 0.05,
+      "description": "Missile proximity warhead burst and plane kill explosion.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "af4f79a6dfe187306c09c474a328b56888bf5fe5",
+      "size_bytes": 97240,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 48510,
+        "duration_s": 1.1
+      }
+    },
+    {
+      "id": "sfx_vulcan_cannon",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/vulcan_cannon.wav",
+      "transcript": null,
+      "sim_trigger": "World::fire (10 Hz forward gun)",
+      "priority": 75,
+      "cooldown_s": 0.08,
+      "description": "F-16 M61A1 Vulcan 20mm rotary cannon burst.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "550a7f7c4188ecd808071a0ad9bef40b4f121cf1",
+      "size_bytes": 17292,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 16000,
+        "bits_per_sample": 16,
+        "frames": 8624,
+        "duration_s": 0.539
+      }
+    },
+    {
+      "id": "sfx_rwr_launch",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/rwr_missile_launch.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Launch { target: local, .. }",
+      "priority": 95,
+      "cooldown_s": 1.0,
+      "description": "Radar Warning Receiver frantic missile launch tone accompanying betty_missile.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "667d3fc32ba587f9c5792c8cbfba61fc43af7259",
+      "size_bytes": 91294,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 48000,
+        "bits_per_sample": 16,
+        "frames": 45534,
+        "duration_s": 0.949
+      }
+    },
+    {
+      "id": "sfx_rwr_new",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/rwr_new_contact.wav",
+      "transcript": null,
+      "sim_trigger": "Lock::locked() achieved or new enemy enters lock range",
+      "priority": 70,
+      "cooldown_s": 0.5,
+      "description": "Radar Warning Receiver new threat / lock chirp.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "7977534941ac4fa59007f3ce570f6ab24937d389",
+      "size_bytes": 35636,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 48000,
+        "bits_per_sample": 16,
+        "frames": 17708,
+        "duration_s": 0.369
+      }
+    },
+    {
+      "id": "sfx_rwr_sam_launch",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/rwr_sam_launch.wav",
+      "transcript": null,
+      "sim_trigger": "Enemy Lock held on local player (0.0 < enemy_lock.held < 1.2s)",
+      "priority": 88,
+      "cooldown_s": 1.2,
+      "description": "RWR pre-launch lock warning beep.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "8d1b715dba4d883a0eda69a494ee42947d919717",
+      "size_bytes": 73652,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 22050,
+        "bits_per_sample": 16,
+        "frames": 36804,
+        "duration_s": 1.669
+      }
+    },
+    {
+      "id": "sfx_caution_tone",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/caution_tone.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Hit { target: local, .. }",
+      "priority": 72,
+      "cooldown_s": 0.25,
+      "description": "Cockpit master caution electronic alert tone on hit.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "04cf067f0e1ebf16ff3743766d1f76e41b1e2685",
+      "size_bytes": 21396,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 22050,
+        "bits_per_sample": 16,
+        "frames": 10676,
+        "duration_s": 0.484
+      }
+    },
+    {
+      "id": "sfx_stall_horn",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/stall_horn.wav",
+      "transcript": null,
+      "sim_trigger": "Plane.parts.engine == 0 || Plane.speed() <= MIN_SPEED",
+      "priority": 80,
+      "cooldown_s": 1.5,
+      "description": "Cockpit stall warning horn when engine is dead or airspeed drops to minimum.",
+      "source": "SoulMaril/wt-betty",
+      "git_sha1": "3b3e4544e2204f5e82a1acd0dfff139eab2f02ca",
+      "size_bytes": 38508,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 22050,
+        "bits_per_sample": 8,
+        "frames": 38464,
+        "duration_s": 1.744
+      }
+    },
+    {
+      "id": "sfx_stall_buffet",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/stall_buffet.wav",
+      "transcript": null,
+      "sim_trigger": "Event::Broken airframe structural shudder",
+      "priority": 82,
+      "cooldown_s": 0.5,
+      "description": "Heavy airframe structural buffet when a wing or tail breaks off.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "d8c6189452b0400ab9816e2fa3e53f67def71881",
+      "size_bytes": 68232,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 34030,
+        "duration_s": 0.772
+      }
+    },
+    {
+      "id": "sfx_engine_cockpit",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/engine_cockpit_loop.wav",
+      "transcript": null,
+      "sim_trigger": "Continuous loop while Plane.alive && Plane.parts.engine > 0",
+      "priority": 40,
+      "cooldown_s": 0.0,
+      "description": "Internal cockpit F110 turbine engine loop.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "ea12d2ace2cb21528ce4bae49afce53955e13c7a",
+      "size_bytes": 404286,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 24000,
+        "bits_per_sample": 16,
+        "frames": 202108,
+        "duration_s": 8.421
+      }
+    },
+    {
+      "id": "sfx_exhaust_afterburner",
+      "category": "sfx",
+      "url": "/assets/audio/sfx/exhaust_afterburner_loop.wav",
+      "transcript": null,
+      "sim_trigger": "Continuous loop while Controls.boost == true && Plane.parts.engine > 0",
+      "priority": 45,
+      "cooldown_s": 0.0,
+      "description": "Afterburner boost exhaust roar loop.",
+      "source": "NikolaiVChr/f16",
+      "git_sha1": "95f405476b589723334a07cb798c4d10013d1314",
+      "size_bytes": 277292,
+      "audio": {
+        "format": "wav",
+        "channels": 1,
+        "sample_rate_hz": 44100,
+        "bits_per_sample": 16,
+        "frames": 138592,
+        "duration_s": 3.143
+      }
+    }
+  ]
+}

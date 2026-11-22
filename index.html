@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+		<meta name="theme-color" content="#0b0f14">
+		<!-- A phone that starts the game from its home screen shows it in full screen, held sideways. -->
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<link rel="manifest" href="manifest.json">
+		<title>Dogfight</title>
+		<!-- The game has no icon yet. An empty one stops the request of the browser for a file. -->
+		<link rel="icon" href="data:,">
+		<link rel="stylesheet" href="style.css">
+		<!-- The workflow that publishes the game to GitHub Pages writes the address of the game server
+			of the local network here. The page then sends players there for the multiplayer game. -->
+		<meta name="game-server" content="https://192.168.0.87:5201">
+	</head>
+	<body>
+		<canvas id="game" tabindex="-1" aria-label="The sky of the match"></canvas>
+
+		<div id="hud" hidden>
+			<div id="nose" class="mark" aria-hidden="true"></div>
+			<div id="lock-box" class="mark" aria-hidden="true" hidden></div>
+			<div id="markers" aria-hidden="true"></div>
+			<ul id="feed" aria-live="polite"></ul>
+			<p id="heading" aria-label="Heading"></p>
+			<table id="scores" aria-label="Scores"><tbody id="score-rows"></tbody></table>
+			<p id="alert" role="status" aria-live="assertive"></p>
+			<p id="praise" role="status" aria-live="polite"></p>
+			<section id="target" aria-label="Target" hidden>
+				<p id="target-name"></p>
+				<dl id="target-parts"></dl>
+			</section>
+			<div id="health">
+				<p id="plane-name" aria-label="Your plane"></p>
+				<!-- The plane of the player from above, with the nose at the top. Each part shows its state. -->
+				<svg id="diagram" viewBox="-60 -50 120 100" width="120" height="100" role="img" aria-label="The state of the parts of your plane">
+					<rect id="shape-1" x="-56" y="-8" width="50" height="18" rx="2"/>
+					<rect id="shape-2" x="6" y="-8" width="50" height="18" rx="2"/>
+					<rect id="shape-0" x="-6" y="-26" width="12" height="52" rx="3"/>
+					<rect id="shape-3" x="-15" y="27" width="30" height="12" rx="2"/>
+					<rect id="shape-4" x="-5" y="-40" width="10" height="13" rx="2"/>
+				</svg>
+				<dl id="parts"></dl>
+			</div>
+			<div id="gauges">
+				<dl id="flight">
+					<div><dt>Speed</dt><dd id="speed"></dd></div>
+					<div><dt>Height</dt><dd id="height"></dd></div>
+					<div><dt>Throttle</dt><dd class="bar" id="throttle"></dd></div>
+					<div><dt>Boost</dt><dd class="bar" id="boost"></dd></div>
+					<div><dt>Missiles</dt><dd id="missiles" class="pips"></dd></div>
+					<div><dt>Flares</dt><dd id="flares" class="pips"></dd></div>
+				</dl>
+			</div>
+			<canvas id="radar" width="176" height="176" aria-label="Radar: the planes around you, with your nose at the top"></canvas>
+
+			<!-- The controls of a phone, held sideways: a stick under the left thumb, and buttons under the right one. -->
+			<div id="touch" hidden>
+				<div id="stick" role="slider" aria-label="Steer" aria-valuetext="Drag to steer"><div id="knob"></div></div>
+				<label id="throttle-slide">
+					<span>THR</span>
+					<input id="touch-throttle" name="touch-throttle" type="range" min="0" max="1" step="0.05" aria-label="Throttle">
+				</label>
+				<div id="touch-top">
+					<button type="button" id="touch-pause" aria-label="Pause Menu">II</button>
+					<button type="button" id="touch-tilt" aria-pressed="true">TILT</button>
+					<button type="button" id="touch-centre" hidden>CENTRE</button>
+				</div>
+				<button type="button" id="touch-fire" aria-label="Fire the Gun">GUN</button>
+				<button type="button" id="touch-launch" aria-label="Launch a Missile">MSL</button>
+				<button type="button" id="touch-flare" aria-label="Release a Flare">FLARE</button>
+				<button type="button" id="touch-boost" aria-label="Boost">BOOST</button>
+			</div>
+		</div>
+
+		<p id="sideways" role="alert">Turn your phone sideways to play.</p>
+
+		<aside id="elsewhere" role="dialog" aria-modal="true" aria-labelledby="elsewhere-title" hidden>
+			<div>
+				<h2 id="elsewhere-title">Play With Everyone</h2>
+				<p>This copy of the game plays solo. The full multiplayer game runs on the game server of the local network:</p>
+				<a id="elsewhere-link" href="./"></a>
+				<p class="lead">The first visit shows a warning about the certificate of the server. Accept it once.</p>
+				<button type="button" id="elsewhere-close" class="quiet">Play Solo Here</button>
+			</div>
+		</aside>
+
+		<main id="ui">
+			<p id="status" role="status" aria-live="polite">Loading…</p>
+
+			<section id="menu" class="screen" aria-labelledby="menu-title" hidden>
+				<div id="intro">
+					<h1 id="menu-title">Dogfight</h1>
+					<p class="lead">Chase a plane, and shoot it apart. Each lost part changes how a plane flies.</p>
+					<ul id="features" aria-label="What the game has">
+						<li><strong>Planes that break:</strong> two wings, a tail, an engine, and a fuselage. Lose a wing, and you fall.</li>
+						<li><strong>Weapons:</strong> a gun, missiles that follow their target, and flares that lure a missile away.</li>
+						<li><strong>Power-ups:</strong> rings in the sky give speed, full weapons, or a repair.</li>
+						<li><strong>Better planes:</strong> your kills take you from a biplane to a fighter, and to a jet.</li>
+						<li><strong>Solo or together:</strong> fight bots alone, or up to 16 pilots in a room on this network.</li>
+						<li><strong>Any device:</strong> a mouse on a desktop, and a stick or the tilt of a phone.</li>
+					</ul>
+				</div>
+				<div id="entry">
+					<p id="fallback" class="warning" role="status" hidden>
+						This browser gives the game no WebGPU, so the game draws with WebGL2. The picture can be slower and
+						less smooth. A current Chromium browser draws it best.
+					</p>
+					<label for="name">Your Name</label>
+					<input id="name" name="name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Such as Ada…">
+					<div class="row">
+						<button type="button" data-action="solo">Fly Solo</button>
+						<button type="button" data-action="online">Find a Room</button>
+					</div>
+					<div class="row">
+						<button type="button" id="fullscreen-menu" data-action="fullscreen" class="fullscreen">Full Screen</button>
+						<button type="button" data-action="help" class="quiet">How to Play</button>
+						<button type="button" data-action="settings" class="quiet">Settings</button>
+					</div>
+					<p id="fullscreen-note" class="lead">The game plays best in full screen.</p>
+				</div>
+			</section>
+
+			<section id="help" class="screen" aria-labelledby="help-title" hidden>
+				<h2 id="help-title">How to Play</h2>
+				<p>Shoot the other planes down, and stay out of the ground. A plane that loses a wing falls. A lost tail or a dead engine makes a plane hard to fly.</p>
+				<ul class="desktop-only">
+					<li><strong>Steer:</strong> move the mouse. The plane flies toward the cursor.</li>
+					<li><strong>Gun:</strong> the left mouse button, or Space.</li>
+					<li><strong>Missile:</strong> hold your nose on a plane until the box on it turns red. Then press the right mouse button, or F.</li>
+					<li><strong>Flare:</strong> press E when a missile comes, or turn hard across its path.</li>
+					<li><strong>Speed:</strong> the mouse wheel, or W and S, set the throttle. Shift gives a boost.</li>
+					<li><strong>Menu:</strong> Escape.</li>
+				</ul>
+				<ul class="touch-only">
+					<li><strong>Steer:</strong> the stick under your left thumb. TILT lets you steer by tilting the phone.</li>
+					<li><strong>Gun:</strong> hold GUN.</li>
+					<li><strong>Missile:</strong> hold your nose on a plane until the box on it turns red. Then tap MSL.</li>
+					<li><strong>Flare:</strong> tap FLARE when a missile comes, or turn hard across its path.</li>
+					<li><strong>Speed:</strong> the THR slider sets the throttle. Hold BOOST for a boost.</li>
+					<li><strong>Menu:</strong> tap II.</li>
+				</ul>
+				<p>Fly through a glowing ring to get speed, full weapons, or a repair. More kills give you a newer plane.</p>
+				<div class="row"><button type="button" data-action="back">Back</button></div>
+			</section>
+
+			<section id="rooms" class="screen" aria-labelledby="rooms-title" hidden>
+				<h2 id="rooms-title">Rooms on This Network</h2>
+				<p id="rooms-note" role="status" aria-live="polite"></p>
+				<ul id="room-list" class="list"></ul>
+				<form data-action="create" class="row">
+					<label for="room-title">New Room</label>
+					<input id="room-title" name="room-title" type="text" maxlength="32" autocomplete="off" placeholder="Such as Friday Night…">
+					<button type="submit">Create Room</button>
+				</form>
+				<form data-action="server" class="row">
+					<label for="server-address">Game Server</label>
+					<input id="server-address" name="server-address" type="text" autocomplete="off" spellcheck="false" inputmode="url" placeholder="The server of this page">
+					<button type="submit" class="quiet">Use Server</button>
+				</form>
+				<div class="row">
+					<button type="button" data-action="refresh" class="quiet">Refresh List</button>
+					<button type="button" data-action="menu" class="quiet">Back to Menu</button>
+				</div>
+			</section>
+
+			<section id="lobby" class="screen" aria-labelledby="lobby-title" hidden>
+				<h2 id="lobby-title">Lobby</h2>
+				<p id="lobby-note" role="status" aria-live="polite"></p>
+				<ul id="players" class="list"></ul>
+				<fieldset id="bots">
+					<legend>Bots</legend>
+					<div class="row">
+						<button type="button" id="bots-less" data-action="bots-less" aria-label="Fewer Bots">−</button>
+						<output id="bots-count" for="bots" aria-live="polite"></output>
+						<button type="button" id="bots-more" data-action="bots-more" aria-label="More Bots">+</button>
+						<label for="skill">Skill</label>
+						<select id="skill" name="skill" autocomplete="off">
+							<option>Rookie</option>
+							<option>Pilot</option>
+							<option>Veteran</option>
+							<option>Ace</option>
+						</select>
+					</div>
+				</fieldset>
+				<form id="rename" data-action="rename" class="row" hidden>
+					<label for="new-title">Room Name</label>
+					<input id="new-title" name="new-title" type="text" maxlength="32" autocomplete="off">
+					<button type="submit" class="quiet">Rename Room</button>
+				</form>
+				<div class="row">
+					<button type="button" id="start" data-action="start">Start Match</button>
+					<button type="button" id="fullscreen-lobby" data-action="fullscreen" class="quiet fullscreen">Full Screen</button>
+					<button type="button" data-action="leave" class="quiet">Leave</button>
+				</div>
+			</section>
+
+			<section id="settings" class="screen" aria-labelledby="settings-title" hidden>
+				<h2 id="settings-title">Settings</h2>
+				<p id="controls-note">The plane turns toward the mouse cursor. The left button fires the gun, the right button launches a missile, and the wheel sets the throttle. A flare lures a missile away, if you release it in time. Select a key to change it.</p>
+				<table id="bindings" aria-label="Keys"><tbody id="binding-rows"></tbody></table>
+				<p id="bind-note" role="status" aria-live="polite"></p>
+				<label for="sensitivity">Mouse Sensitivity</label>
+				<input id="sensitivity" name="sensitivity" type="range" min="0.4" max="2" step="0.1">
+				<label for="effects-volume">Sound Effects</label>
+				<input id="effects-volume" name="effects-volume" type="range" min="0" max="1" step="0.05">
+				<label for="voice-volume">Pilot Voices</label>
+				<input id="voice-volume" name="voice-volume" type="range" min="0" max="1" step="0.05">
+				<label class="check"><input id="invert" name="invert" type="checkbox"> Invert the Vertical Axis</label>
+				<label class="check"><input id="calm" name="calm" type="checkbox"> Show No Flashes on a Hit</label>
+				<div class="row">
+					<button type="button" data-action="defaults" class="quiet">Restore the Default Keys</button>
+					<button type="button" data-action="back">Back</button>
+				</div>
+			</section>
+
+			<section id="pause" class="screen" aria-labelledby="pause-title" hidden>
+				<h2 id="pause-title">Paused</h2>
+				<p id="pause-note"></p>
+				<div class="row">
+					<button type="button" data-action="resume">Resume</button>
+					<button type="button" data-action="help" class="quiet">How to Play</button>
+					<button type="button" data-action="settings" class="quiet">Settings</button>
+					<button type="button" id="fullscreen-pause" data-action="fullscreen" class="quiet fullscreen">Full Screen</button>
+					<button type="button" id="end" data-action="end" class="quiet">End Match</button>
+					<button type="button" data-action="leave" class="quiet">Leave</button>
+				</div>
+			</section>
+
+			<section id="results" class="screen" aria-labelledby="results-title" hidden>
+				<h2 id="results-title">Results</h2>
+				<table id="result-table">
+					<thead><tr><th scope="col">Pilot</th><th scope="col">Kills</th><th scope="col">Losses</th></tr></thead>
+					<tbody id="result-rows"></tbody>
+				</table>
+				<div class="row"><button type="button" data-action="close-results">Back to the Lobby</button></div>
+			</section>
+
+			<section id="lost" class="screen" aria-labelledby="lost-title" hidden>
+				<h2 id="lost-title">Connection Lost</h2>
+				<p id="lost-note" role="alert"></p>
+				<div class="row"><button type="button" data-action="menu">Back to Menu</button></div>
+			</section>
+		</main>
+
+		<!-- A page can start WebAssembly only from a script. This script also chooses the build of the
+			client: the one for WebGPU, or the one for WebGL2 where the browser gives no WebGPU adapter.
+			It shows how much of the game arrived, and it says why when the game cannot start.
+			Everything after the start is Rust. -->
+		<script type="module">
+			// A published copy names the game server of the local network, and offers it before anything else.
+			const server = document.querySelector('meta[name="game-server"]')?.content;
+			if (server) {
+				const overlay = document.getElementById("elsewhere");
+				const link = document.getElementById("elsewhere-link");
+				link.href = server;
+				link.textContent = server;
+				overlay.hidden = false;
+				link.focus();
+				document.getElementById("elsewhere-close").addEventListener("click", () => {
+					overlay.hidden = true;
+				});
+			}
+			const status = document.getElementById("status");
+			const forced = new URLSearchParams(location.search).get("backend") ?? sessionStorage.getItem("backend");
+			// Some browsers offer WebGPU and then never answer. Three seconds are enough for an adapter.
+			const adapter =
+				forced !== "webgl2" && navigator.gpu
+					? await Promise.race([navigator.gpu.requestAdapter().catch(() => null), new Promise((done) => setTimeout(done, 3000, null))])
+					: null;
+			const backend = adapter ? "webgpu" : "webgl2";
+			document.documentElement.dataset.backend = backend;
+			try {
+				const client = await import(`./${backend}/app.js`);
+				const answer = await fetch(`./${backend}/app_bg.wasm`);
+				if (!answer.ok) throw new Error(`the server has no ${backend} build`);
+				// The game is large. The page counts the bytes as they arrive, and compiles them on the way.
+				const megabytes = (bytes) => Math.round(bytes / 1e6);
+				const size = Number(answer.headers.get("Content-Length"));
+				let arrived = 0;
+				const counted = answer.body.pipeThrough(
+					new TransformStream({
+						transform(chunk, controller) {
+							arrived += chunk.length;
+							status.textContent = `Loading the game… ${megabytes(arrived)}${size ? ` of ${megabytes(size)}` : ""} MB`;
+							controller.enqueue(chunk);
+						},
+					}),
+				);
+				await client.default({ module_or_path: new Response(counted, { headers: { "Content-Type": "application/wasm" } }) });
+			} catch (error) {
+				// The engine leaves its start function through an exception, which is not an error.
+				if (!String(error).includes("Using exceptions for control flow")) {
+					if (backend === "webgpu" && !forced) {
+						// WebGPU failed on this device: the page tries the WebGL2 client once.
+						sessionStorage.setItem("backend", "webgl2");
+						location.reload();
+					} else {
+						status.textContent = `The game cannot start in this browser (${String(error).slice(0, 160)}). Load the page again, or use a current Chrome. On the host, “cargo xtask build” makes both builds of the game.`;
+					}
+				}
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,874 @@
+:root {
+	color-scheme: dark;
+	--ground: #0b0f14;
+	--panel: rgb(13 18 26 / 92%);
+	--line: #2c3a4d;
+	--text: #dbe4ef;
+	--dim: #93a3b8;
+	--accent: #f2c230;
+	--danger: #ff6b57;
+	--good: #6fd08c;
+	font: 16px/1.45 system-ui, sans-serif;
+}
+
+/* A pointer on the page aims and fires, so the page must not scroll, select, or bounce. */
+html,
+body {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+	/* A sky shows before the first picture of the game, and behind the menus of a slow device. */
+	background: linear-gradient(to bottom, #16283f 0%, #4a739f 62%, #9fb7cd 100%) var(--ground);
+	color: var(--text);
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: fine) {
+	html {
+		overscroll-behavior: none;
+	}
+}
+
+#game {
+	position: fixed;
+	inset: 0;
+	display: block;
+	width: 100vw;
+	height: 100vh;
+	touch-action: none;
+	cursor: crosshair;
+}
+
+#game:focus-visible {
+	outline: none;
+}
+
+/* The game draws nothing behind the menus of a slow device, so the canvas holds an old picture. */
+#game.resting {
+	opacity: 0;
+}
+
+#ui {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom))
+		max(1rem, env(safe-area-inset-left));
+	pointer-events: none;
+	overflow-y: auto;
+}
+
+#status {
+	max-width: 36rem;
+	text-align: center;
+	white-space: pre-wrap;
+	color: var(--dim);
+}
+
+#status:empty {
+	display: none;
+}
+
+.screen {
+	pointer-events: auto;
+	box-sizing: border-box;
+	width: min(34rem, 100%);
+	max-height: 100%;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 1.25rem 1.5rem;
+	border: 1px solid var(--line);
+	border-radius: 0.75rem;
+	background: var(--panel);
+	display: grid;
+	gap: 0.75rem;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+h1,
+h2 {
+	margin: 0;
+	text-wrap: balance;
+	line-height: 1.15;
+}
+
+h1 {
+	font-size: 2.4rem;
+	color: var(--accent);
+}
+
+p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.lead,
+#lobby-note,
+#rooms-note,
+#bind-note,
+#pause-note {
+	color: var(--dim);
+}
+
+/* The offer of a published copy: the multiplayer game runs on the game server of the local network. */
+#elsewhere {
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	display: grid;
+	place-items: center;
+	padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom))
+		max(1rem, env(safe-area-inset-left));
+	background: rgb(11 15 20 / 85%);
+	overflow-y: auto;
+}
+
+#elsewhere > div {
+	box-sizing: border-box;
+	width: min(40rem, 100%);
+	display: grid;
+	gap: 1rem;
+	padding: 1.5rem;
+	border: 2px solid var(--accent);
+	border-radius: 0.9rem;
+	background: var(--panel);
+	text-align: center;
+}
+
+#elsewhere h2 {
+	font-size: clamp(1.6rem, 5vw, 2.4rem);
+	color: var(--accent);
+}
+
+#elsewhere-link {
+	display: block;
+	padding: 1.1rem 1.25rem;
+	border-radius: 0.6rem;
+	background: var(--accent);
+	color: #151a22;
+	font-size: clamp(1.25rem, 5vw, 2rem);
+	font-weight: 800;
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+
+#elsewhere-link:hover,
+#elsewhere-link:focus-visible {
+	background: #ffd95a;
+	outline: 3px solid #fff;
+	outline-offset: 2px;
+}
+
+#elsewhere-close {
+	justify-self: center;
+}
+
+.warning {
+	padding: 0.6rem 0.75rem;
+	border-left: 0.25rem solid var(--accent);
+	background: rgb(242 194 48 / 12%);
+}
+
+/* The entry screen: what the game is, and the way into it. */
+#menu {
+	width: min(38rem, 100%);
+}
+
+#intro,
+#entry {
+	display: grid;
+	gap: 0.75rem;
+	align-content: start;
+}
+
+#features {
+	margin: 0;
+	padding-left: 1.1rem;
+	display: grid;
+	gap: 0.2rem;
+	color: var(--dim);
+	font-size: 0.9rem;
+}
+
+#features strong {
+	color: var(--text);
+}
+
+/* A phone on its side is wide and low: the two halves of the entry screen stand side by side. */
+@media (min-width: 40rem) and (max-height: 34rem) {
+	#menu {
+		width: min(60rem, 100%);
+		grid-template-columns: 1fr 1fr;
+		column-gap: 1.5rem;
+		padding: 0.9rem 1.2rem;
+	}
+
+	#menu h1 {
+		font-size: 1.8rem;
+	}
+
+	#features {
+		font-size: 0.8rem;
+	}
+}
+
+/* A browser without full screen for a page shows no button for it, and the note says what to do. */
+.no-fullscreen button.fullscreen {
+	display: none;
+}
+
+/* A game that starts from the home screen of a phone fills the screen already. */
+@media (display-mode: fullscreen), (display-mode: standalone) {
+	#fullscreen-note,
+	button.fullscreen {
+		display: none;
+	}
+}
+
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+label {
+	color: var(--dim);
+}
+
+.check {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0;
+	color: var(--text);
+	cursor: pointer;
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: var(--text);
+}
+
+button {
+	min-height: 2.75rem;
+	padding: 0.4rem 1rem;
+	border: 1px solid var(--accent);
+	border-radius: 0.5rem;
+	background: var(--accent);
+	color: #151a22;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+button:hover {
+	background: #ffd95a;
+}
+
+button.quiet {
+	border-color: var(--line);
+	background: #1b2533;
+	color: var(--text);
+	font-weight: 400;
+}
+
+button.quiet:hover {
+	border-color: var(--dim);
+	background: #243145;
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+input[type="text"],
+select {
+	min-width: 0;
+	flex: 1 1 10rem;
+	min-height: 2.75rem;
+	box-sizing: border-box;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--line);
+	border-radius: 0.5rem;
+	background-color: #121a26;
+	color: var(--text);
+}
+
+select {
+	flex: 0 1 9rem;
+}
+
+input[type="range"] {
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+input[type="checkbox"] {
+	width: 1.25rem;
+	height: 1.25rem;
+	accent-color: var(--accent);
+}
+
+:focus-visible {
+	outline: 3px solid #7fc4ff;
+	outline-offset: 2px;
+}
+
+fieldset {
+	margin: 0;
+	padding: 0.5rem 0.75rem 0.75rem;
+	border: 1px solid var(--line);
+	border-radius: 0.5rem;
+}
+
+output {
+	min-width: 2ch;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 0.35rem;
+}
+
+.list li {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.35rem 0.6rem;
+	border: 1px solid var(--line);
+	border-radius: 0.5rem;
+}
+
+.list .name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.list .note {
+	color: var(--dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.list:empty {
+	display: none;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+	padding: 0.3rem 0.4rem;
+	text-align: left;
+	border-bottom: 1px solid var(--line);
+}
+
+td:not(:first-child),
+th:not(:first-child) {
+	text-align: right;
+}
+
+#bindings td:last-child button {
+	min-width: 9rem;
+}
+
+/* The display of a match. It never takes a click from the sky. */
+#hud {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	font-variant-numeric: tabular-nums;
+	text-shadow: 0 1px 2px #000;
+	padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+		max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+}
+
+.mark {
+	position: absolute;
+	left: 0;
+	top: 0;
+	will-change: transform;
+}
+
+#nose {
+	width: 26px;
+	height: 26px;
+	margin: -13px 0 0 -13px;
+	border: 2px solid var(--good);
+	border-radius: 50%;
+	box-sizing: border-box;
+}
+
+#nose.hit {
+	border-color: #fff;
+	box-shadow: 0 0 0 3px var(--danger);
+}
+
+#lock-box {
+	width: 64px;
+	height: 64px;
+	margin: -32px 0 0 -32px;
+	border: 2px solid var(--accent);
+	box-sizing: border-box;
+}
+
+#lock-box.ready {
+	border-color: var(--danger);
+	border-width: 3px;
+}
+
+.marker {
+	position: absolute;
+	left: 0;
+	top: 0;
+	color: var(--text);
+	font-size: 0.7rem;
+	text-align: center;
+	white-space: nowrap;
+	will-change: transform;
+}
+
+.marker::before {
+	content: "";
+	display: block;
+	width: 28px;
+	height: 28px;
+	margin: 0 auto 2px;
+	border: 1px solid var(--danger);
+	box-sizing: border-box;
+}
+
+.marker.safe::before {
+	border-style: dashed;
+	border-color: var(--dim);
+}
+
+.marker.edge::before {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	border-width: 3px;
+}
+
+#feed {
+	position: absolute;
+	left: max(0.75rem, env(safe-area-inset-left));
+	top: calc(max(0.75rem, env(safe-area-inset-top)) + 7.5rem);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--dim);
+	font-size: 0.85rem;
+}
+
+#scores {
+	position: absolute;
+	right: max(0.75rem, env(safe-area-inset-right));
+	top: max(0.75rem, env(safe-area-inset-top));
+	width: auto;
+	font-size: 0.85rem;
+}
+
+#scores td {
+	border: 0;
+	padding: 0.05rem 0.4rem;
+	max-width: 10rem;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+#scores .me td {
+	color: var(--accent);
+}
+
+#alert {
+	position: absolute;
+	left: 50%;
+	top: 22%;
+	translate: -50% 0;
+	color: var(--danger);
+	font-size: 1.3rem;
+	font-weight: 700;
+	text-align: center;
+	white-space: pre-line;
+}
+
+/* The state of the plane: its picture and the health of each part, at the top left. */
+#health {
+	position: absolute;
+	/* The name of the plane stands under the group. */
+	left: max(0.75rem, env(safe-area-inset-left));
+	top: max(0.75rem, env(safe-area-inset-top));
+	display: flex;
+	gap: 0.75rem;
+	align-items: center;
+	font-size: 0.85rem;
+}
+
+#alert.calm {
+	color: var(--good);
+	font-size: 1.05rem;
+}
+
+#plane-name {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 0.2rem);
+	margin: 0;
+	color: var(--accent);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+#gauges {
+	position: absolute;
+	left: max(0.75rem, env(safe-area-inset-left));
+	bottom: max(0.75rem, env(safe-area-inset-bottom));
+	font-size: 0.85rem;
+}
+
+dl {
+	margin: 0;
+	display: grid;
+	gap: 0.15rem;
+}
+
+dl > div {
+	display: grid;
+	grid-template-columns: 5.5rem 6rem;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+dt {
+	color: var(--dim);
+}
+
+dd {
+	margin: 0;
+}
+
+.bar {
+	--health: 1;
+	height: 0.55rem;
+	border: 1px solid var(--line);
+	background: linear-gradient(to right, var(--good) calc(var(--health) * 100%), rgb(0 0 0 / 45%) 0);
+}
+
+.bar.low {
+	background: linear-gradient(to right, var(--accent) calc(var(--health) * 100%), rgb(0 0 0 / 45%) 0);
+}
+
+.bar.gone {
+	border-color: var(--danger);
+	background: rgb(255 107 87 / 25%);
+}
+
+/* The fuller display: the heading, the target, the damage picture, the weapons, and the radar. */
+#heading {
+	position: absolute;
+	left: 50%;
+	top: max(0.75rem, env(safe-area-inset-top));
+	translate: -50% 0;
+	font-size: 0.95rem;
+	letter-spacing: 0.08em;
+}
+
+#praise {
+	position: absolute;
+	left: 50%;
+	top: 34%;
+	translate: -50% 0;
+	color: var(--good);
+	font-size: 1.15rem;
+	font-weight: 700;
+	text-align: center;
+}
+
+#target {
+	position: absolute;
+	right: max(0.75rem, env(safe-area-inset-right));
+	top: 38%;
+	width: 13rem;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--line);
+	background: rgb(13 18 26 / 55%);
+	font-size: 0.8rem;
+}
+
+#target-name {
+	margin-bottom: 0.3rem;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--accent);
+}
+
+#target-parts > div {
+	grid-template-columns: 5.6rem 1fr;
+}
+
+#diagram rect {
+	fill: var(--good);
+	stroke: #0b0f14;
+	stroke-width: 1.5;
+}
+
+#diagram rect.low {
+	fill: var(--accent);
+}
+
+#diagram rect.gone {
+	fill: none;
+	stroke: var(--danger);
+	stroke-dasharray: 3 3;
+}
+
+.pips {
+	letter-spacing: 0.25em;
+	color: var(--accent);
+}
+
+#radar {
+	position: absolute;
+	right: max(0.75rem, env(safe-area-inset-right));
+	bottom: max(0.75rem, env(safe-area-inset-bottom));
+	width: 11rem;
+	height: 11rem;
+}
+
+.marker.edge {
+	color: var(--dim);
+}
+
+/* A hit on the own plane shows at the edge of the picture for a moment. */
+#hud.hurt {
+	box-shadow: inset 0 0 0 0.5rem rgb(255 107 87 / 55%);
+}
+
+/* A phone that stands upright gets a notice, because the game needs the wide picture. */
+#sideways {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	place-items: center;
+	padding: 2rem;
+	background: var(--ground);
+	font-size: 1.3rem;
+	text-align: center;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+	#sideways {
+		display: grid;
+	}
+}
+
+/* The controls of a phone. Each one takes its touches, and the sky between them takes none. */
+#touch {
+	position: absolute;
+	inset: 0;
+	text-shadow: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+#touch button,
+#stick,
+#throttle-slide {
+	position: absolute;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+#touch button {
+	min-height: 0;
+	padding: 0;
+	border: 2px solid rgb(255 255 255 / 55%);
+	border-radius: 50%;
+	background: rgb(13 18 26 / 45%);
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+#touch button.held,
+#touch button[aria-pressed="true"] {
+	background: rgb(242 194 48 / 70%);
+	color: #151a22;
+}
+
+#stick {
+	left: max(1.5rem, env(safe-area-inset-left));
+	bottom: max(1.25rem, env(safe-area-inset-bottom));
+	width: 9rem;
+	height: 9rem;
+	border: 2px solid rgb(255 255 255 / 45%);
+	border-radius: 50%;
+	background: rgb(13 18 26 / 35%);
+}
+
+#knob {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 3.6rem;
+	height: 3.6rem;
+	margin: -1.8rem 0 0 -1.8rem;
+	border-radius: 50%;
+	background: rgb(255 255 255 / 65%);
+	will-change: transform;
+}
+
+#throttle-slide {
+	left: max(0.5rem, env(safe-area-inset-left));
+	top: max(26%, 5.75rem);
+	display: grid;
+	justify-items: center;
+	gap: 0.25rem;
+	color: #fff;
+	font-size: 0.7rem;
+}
+
+#touch-throttle {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	width: 2.2rem;
+	height: 7.5rem;
+}
+
+#touch-top {
+	position: absolute;
+	left: 50%;
+	bottom: max(0.5rem, env(safe-area-inset-bottom));
+	translate: -50% 0;
+	display: flex;
+	gap: 0.6rem;
+}
+
+#touch-top button {
+	position: static;
+	width: 3.4rem;
+	height: 2.4rem;
+	border-radius: 0.6rem;
+}
+
+#touch-fire {
+	right: max(1.5rem, env(safe-area-inset-right));
+	bottom: max(1.5rem, env(safe-area-inset-bottom));
+	width: 6rem;
+	height: 6rem;
+}
+
+#touch-launch {
+	right: calc(max(1.5rem, env(safe-area-inset-right)) + 6.6rem);
+	bottom: max(1rem, env(safe-area-inset-bottom));
+	width: 4rem;
+	height: 4rem;
+}
+
+#touch-flare {
+	right: calc(max(1.5rem, env(safe-area-inset-right)) + 5.4rem);
+	bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 4.6rem);
+	width: 4rem;
+	height: 4rem;
+}
+
+#touch-boost {
+	right: max(1rem, env(safe-area-inset-right));
+	bottom: calc(max(1.5rem, env(safe-area-inset-bottom)) + 6.6rem);
+	width: 4rem;
+	height: 4rem;
+}
+
+/* With the controls of a phone, the display moves out from under the thumbs, and shows less. */
+.touch #health {
+	gap: 0.5rem;
+	font-size: 0.7rem;
+	transform: scale(0.72);
+	transform-origin: top left;
+}
+
+.touch #gauges {
+	left: 50%;
+	bottom: auto;
+	top: 2.4rem;
+	translate: -50% 0;
+	font-size: 0.75rem;
+	transform: scale(0.85);
+	transform-origin: top center;
+}
+
+.touch #feed {
+	display: none;
+}
+
+.touch #radar {
+	bottom: auto;
+	top: 4.5rem;
+	width: 6.5rem;
+	height: 6.5rem;
+}
+
+.touch #target {
+	top: auto;
+	bottom: 12.5rem;
+	right: auto;
+	left: max(0.75rem, env(safe-area-inset-left));
+	width: 9rem;
+	display: none;
+}
+
+.touch #alert {
+	top: 30%;
+	font-size: 1rem;
+}
+
+.touch #scores {
+	font-size: 0.7rem;
+}
+
+/* A phone has no keys and no mouse, so its settings show neither. */
+.touch #bindings,
+.touch #bind-note,
+.touch label[for="sensitivity"],
+.touch #sensitivity,
+.touch [data-action="defaults"] {
+	display: none;
+}
+
+/* The help names the controls of the device in the hand of the player. */
+#help ul {
+	margin: 0;
+	padding-left: 1.2rem;
+	display: grid;
+	gap: 0.3rem;
+}
+
+.touch .desktop-only,
+html:not(.touch) .touch-only {
+	display: none;
+}

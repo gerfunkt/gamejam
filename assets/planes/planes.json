@@ -1,0 +1,36 @@
+[
+  {
+    "file": "wwi-fighter.glb",
+    "key": "wwi-fighter",
+    "kills": 0,
+    "name": "Sopwith Camel",
+    "propeller": {
+      "centre": [
+        0.06462977081537247,
+        0.00008009157318156213,
+        -3.764309883117676
+      ],
+      "radius": 1.7824326753616333
+    }
+  },
+  {
+    "file": "wwii-fighter.glb",
+    "key": "wwii-fighter",
+    "kills": 3,
+    "name": "Supermarine Spitfire",
+    "propeller": {
+      "centre": [
+        0.010954783298075199,
+        0.3841298222541809,
+        -3.5423624515533447
+      ],
+      "radius": 1.412676215171814
+    }
+  },
+  {
+    "file": "f14-tomcat.glb",
+    "key": "f14-tomcat",
+    "kills": 6,
+    "name": "Grumman F-14 Tomcat"
+  }
+]
